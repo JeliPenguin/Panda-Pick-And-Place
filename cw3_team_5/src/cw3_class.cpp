@@ -42,7 +42,7 @@ cw3::t1_callback(cw3_world_spawner::Task1Service::Request &request,
 
   ROS_INFO("The coursework solving callback for task 1 has been triggered");
   
-  bool success = task_1(request.object_point.point, request.goal_point.point, request.shape_type);
+  bool success = t1(request.object_point.point, request.goal_point.point, request.shape_type);
 
   return true;
 }
@@ -209,6 +209,8 @@ cw3::filterPointCloudByColor(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr& input
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGB>);
     color_filter.filter(*cloud_filtered);
 
+    
+
     return cloud_filtered;
 }
 
@@ -253,11 +255,12 @@ cw3::pick(geometry_msgs::Point object,
 ///////////////////////////////////////////////////////////////////////////////
 
 bool 
-cw3::task_1(geometry_msgs::Point object, 
+cw3::t1(geometry_msgs::Point object, 
             geometry_msgs::Point target, 
             std::string shape_type, 
             double size)
 {
+  addGroundCollision();
 
   geometry_msgs::Pose target_pose = moveAbovePose(object);
   target_pose.position.z = 0.7; 
@@ -265,6 +268,13 @@ cw3::task_1(geometry_msgs::Point object,
   moveArm(target_pose);
   
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr filtered_cloud = filterPointCloudByColor(temp_cloud);
+
+  // float num_points_before = temp_cloud->size();
+
+  // int num_points = filtered_cloud->size();
+
+  // std::cout << num_points_before << std::endl;
+  // std::cout << num_points << std::endl;
   
   // 计算质心
   Eigen::Vector4f centroid;
@@ -279,33 +289,112 @@ cw3::task_1(geometry_msgs::Point object,
   // 主轴方向是最大特征值对应的特征向量
   Eigen::Vector3f principal_axis = eigenvectors.col(0);
   
-  // 计算夹角
-  Eigen::Vector3f global_y_axis(0, 1, 0);
-  float cosine_of_angle = principal_axis.dot(global_y_axis) / (principal_axis.norm() * global_y_axis.norm());
-  float angle_radians = acos(cosine_of_angle);
+  // // 计算夹角
+  // Eigen::Vector3f global_y_axis(0, 1, 0);
+  // float cosine_of_angle = principal_axis.dot(global_y_axis) / (principal_axis.norm() * global_y_axis.norm());
+  // float angle_radians = acos(cosine_of_angle);
   
-  // 避免钝角，使角度为锐角
-  if (angle_radians > M_PI / 2) angle_radians -= M_PI;
-  else if (angle_radians < -M_PI / 2) angle_radians += M_PI;
+  // // 避免钝角，使角度为锐角
+  // if (angle_radians > M_PI / 2) angle_radians -= M_PI;
+  // else if (angle_radians < -M_PI / 2) angle_radians += M_PI;
 
-  // 限制角度在-π/4到π/4之间
-  if (angle_radians > M_PI / 4) angle_radians -= M_PI/2;
-  else if (angle_radians < -M_PI / 4) angle_radians += M_PI/2;
+  // // 限制角度在-π/4到π/4之间
+  // if (angle_radians > M_PI / 4) angle_radians -= M_PI/2;
+  // else if (angle_radians < -M_PI / 4) angle_radians += M_PI/2;
   
-  // Positional offsets for pick and place
-  if(shape_type == "cross"){
-    object.x += size * cos(angle_radians);
-    object.y += size * sin(angle_radians);
-    target.x += size;
+  // // Positional offsets for pick and place
+  // if(shape_type == "cross"){
+  //   object.x += size * cos(angle_radians);
+  //   object.y += size * sin(angle_radians);
+  //   target.x += size;
     
-  }else{
-    object.x += 2 * size * sin(angle_radians);
-    object.y += 2 * size * cos(angle_radians);
-    target.y += 2 * size;
+  // }else{
+  //   object.x += 2 * size * sin(angle_radians);
+  //   object.y += 2 * size * cos(angle_radians);
+  //   target.y += 2 * size;
 
-  }
+  // }
   
-  pick(object,target, -angle_radians);
+  // pick(object,target, -angle_radians);
   
   return true;
+}
+
+
+void
+cw3::addCollision(std::string object_name,
+  geometry_msgs::Point centre, geometry_msgs::Vector3 dimensions,
+  geometry_msgs::Quaternion orientation)
+{
+  /* add a collision object in RViz and the MoveIt planning scene */
+
+  // create a collision object message, and a vector of these messages
+  moveit_msgs::CollisionObject collision_object;
+  std::vector<moveit_msgs::CollisionObject> object_vector;
+  
+  // input header information
+  collision_object.id = object_name;
+  collision_object.header.frame_id = base_frame_;
+
+  // define the primitive and its dimensions
+  collision_object.primitives.resize(1);
+  collision_object.primitives[0].type = collision_object.primitives[0].BOX;
+  collision_object.primitives[0].dimensions.resize(3);
+  collision_object.primitives[0].dimensions[0] = dimensions.x;
+  collision_object.primitives[0].dimensions[1] = dimensions.y;
+  collision_object.primitives[0].dimensions[2] = dimensions.z;
+
+  // define the pose of the collision object
+  collision_object.primitive_poses.resize(1);
+  collision_object.primitive_poses[0].position.x = centre.x;
+  collision_object.primitive_poses[0].position.y = centre.y;
+  collision_object.primitive_poses[0].position.z = centre.z;
+  collision_object.primitive_poses[0].orientation = orientation;
+
+  // define that we will be adding this collision object 
+  // hint: what about collision_object.REMOVE?
+  collision_object.operation = collision_object.ADD;
+
+  // add the collision object to the vector, then apply to planning scene
+  object_vector.push_back(collision_object);
+  planning_scene_interface_.applyCollisionObjects(object_vector);
+
+  return;
+}
+
+void
+cw3::removeCollision(std::string object_name)
+{
+  moveit_msgs::CollisionObject collision_object;
+  std::vector<moveit_msgs::CollisionObject> object_vector;
+  
+  // input the name and specify we want it removed
+  collision_object.id = object_name;
+  collision_object.operation = collision_object.REMOVE;
+
+  // apply this collision object removal to the scene
+  object_vector.push_back(collision_object);
+  planning_scene_interface_.applyCollisionObjects(object_vector);
+}
+
+void
+cw3::addGroundCollision()
+{
+  geometry_msgs::Vector3 ground_dimension;
+  ground_dimension.x = 5;
+  ground_dimension.y = 5;
+  ground_dimension.z = 0.02;
+
+  geometry_msgs::Point ground_position;
+  ground_position.x = 0;
+  ground_position.y = 0;
+  ground_position.z = 0.01;
+
+  geometry_msgs::Quaternion ground_orientation;
+  ground_orientation.w = 1;
+  ground_orientation.x = 0;
+  ground_orientation.y = 0;
+  ground_orientation.z = 0;
+
+  addCollision("ground",ground_position,ground_dimension,ground_orientation);
 }

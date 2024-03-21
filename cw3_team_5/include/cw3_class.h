@@ -116,20 +116,38 @@ public:
                   geometry_msgs::Point Goal,
                   float angle);
   bool 
-  task_1(geometry_msgs::Point object, 
+  t1(geometry_msgs::Point object, 
             geometry_msgs::Point target, 
             std::string shape_type, 
             double size=0.04);
+
+  void
+  addCollision(std::string object_name,
+                geometry_msgs::Point centre, 
+                geometry_msgs::Vector3 dimensions,
+                geometry_msgs::Quaternion orientation);
+
+  void
+  removeCollision(std::string object_name);
+
+  void
+  addGroundCollision();
 
   ros::NodeHandle nh_;
   ros::ServiceServer t1_service_;
   ros::ServiceServer t2_service_;
   ros::ServiceServer t3_service_;
+
+  std::string base_frame_ = "panda_link0";
   
    /** \brief MoveIt interface to move groups to seperate the arm and the gripper,
   * these are defined in urdf. */
   moveit::planning_interface::MoveGroupInterface arm_group_{"panda_arm"};
   moveit::planning_interface::MoveGroupInterface hand_group_{"hand"};
+
+  /** \brief MoveIt interface to interact with the moveit planning scene 
+    * (eg collision objects). */
+  moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
   
   
 };
