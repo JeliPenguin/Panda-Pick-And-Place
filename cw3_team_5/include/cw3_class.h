@@ -59,10 +59,6 @@ public:
 
   /* ----- class member functions ----- */
   
-  //ROS subscriber for the input point cloud
-  ros::Subscriber color_cloud_;
-  ros::Subscriber point_cloud_;
-  
   /** \brief Node handle. */
   ros::NodeHandle g_nh;
   
@@ -101,7 +97,7 @@ public:
   moveGripper(float width);
   
   void
-  cloudCallback(const boost::shared_ptr<const sensor_msgs::PointCloud2>& msg);
+  cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg);
 
   void
   pubFilteredPCMsg (ros::Publisher &pc_pub,
@@ -111,8 +107,8 @@ public:
   frameTransform(geometry_msgs::Point from_p, std::string from_frame, std::string to_frame);
 
 
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr 
-  filterPointCloudByColor(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr& input_cloud);
+  PointCPtr 
+  filterPointCloudByColor(PointCPtr &input_cloud);
   
   bool
   pick(geometry_msgs::Point object, 
@@ -124,6 +120,15 @@ public:
             std::string shape_type, 
             double size=0.04);
 
+  std::string
+  determineShape();
+
+  float
+  euclidDistance(geometry_msgs::Point p1,geometry_msgs::Point p2);
+
+  int
+  t2(std::vector<geometry_msgs::PointStamped>& ref_object_points, geometry_msgs::PointStamped mystery_object_point);
+
   void
   addCollision(std::string object_name,
                 geometry_msgs::Point centre, 
@@ -134,18 +139,66 @@ public:
   removeCollision(std::string object_name);
 
   void
-  addGroundCollision();
+  addGroundCollision(float ground_height=0.02);
+
+  void
+  applyPassthrough(PointCPtr &in_cloud_ptr,
+                      PointCPtr &out_cloud_ptr,
+                      std::string axis,
+                      float threshold = 0.04
+                    );
+
+  /** \brief Apply Voxel Grid filtering.
+    * 
+    * \input[in] in_cloud_ptr the input PointCloud2 pointer
+    * \input[out] out_cloud_ptr the output PointCloud2 pointer
+    */
+  void
+  applyVX (PointCPtr &in_cloud_ptr,
+            PointCPtr &out_cloud_ptr);
+
+  /** \brief Apply Pass Through filtering.
+    * 
+    * \input[in] in_cloud_ptr the input PointCloud2 pointer
+    * \input[out] out_cloud_ptr the output PointCloud2 pointer
+    */
+  void
+  applyPT (PointCPtr &in_cloud_ptr,
+            PointCPtr &out_cloud_ptr);
+  
+  /** \brief Normal estimation.
+    * 
+    * \input[in] in_cloud_ptr the input PointCloud2 pointer
+    */
+  void
+  findNormals (PointCPtr &in_cloud_ptr);
+  
+  /** \brief Segment Plane from point cloud.
+    * 
+    * \input[in] in_cloud_ptr the input PointCloud2 pointer
+    */
+  void
+  segPlane (PointCPtr &in_cloud_ptr);
+  
+  /** \brief Segment Cylinder from point cloud.
+    * 
+    * \input[in] in_cloud_ptr the input PointCloud2 pointer
+    */
+  void
+  segCylind (PointCPtr &in_cloud_ptr);
+
 
   ros::NodeHandle nh_;
   ros::ServiceServer t1_service_;
   ros::ServiceServer t2_service_;
   ros::ServiceServer t3_service_;
 
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr temp_cloud_;
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr rgb_cloud_;
   // pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
 
-  std::string base_frame_ = "panda_link0";
-  std::string camera_frame_ = "color";
+  const std::string BASE_FRAME_ = "panda_link0";
+  const std::string CAMERA_FRAME_ = "color";
+  const std::string GROUND_COLLISION_ = "ground";
   
    /** \brief MoveIt interface to move groups to seperate the arm and the gripper,
   * these are defined in urdf. */
@@ -157,6 +210,74 @@ public:
   moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
   
   tf::TransformListener listener_;
+
+  /** \brief The input point cloud frame id. */
+  std::string g_input_pc_frame_id_;
+  
+  /** \brief ROS geometry message point. */
+  geometry_msgs::PointStamped g_cyl_pt_msg;
+  
+  /** \brief Voxel Grid filter's leaf size. */
+  double g_vg_leaf_sz;
+  
+  /** \brief Point Cloud (input) pointer. */
+  PointCPtr g_cloud_ptr;
+  
+  /** \brief Point Cloud (filtered) pointer. */
+  PointCPtr g_cloud_filtered, g_cloud_filtered2, g_cloud_filtered_color;
+  
+  /** \brief Point Cloud (filtered) sensros_msg for publ. */
+  sensor_msgs::PointCloud2 g_cloud_filtered_msg;
+  
+  /** \brief Point Cloud (input). */
+  pcl::PCLPointCloud2 g_pcl_pc;
+  
+  /** \brief Voxel Grid filter. */
+  pcl::VoxelGrid<PointT> g_vx;
+  
+  /** \brief Pass Through filter. */
+  pcl::PassThrough<PointT> g_pt;
+  
+  /** \brief Pass Through min and max threshold sizes. */
+  double g_pt_thrs_min, g_pt_thrs_max;
+  
+  /** \brief KDTree for nearest neighborhood search. */
+  pcl::search::KdTree<PointT>::Ptr g_tree_ptr;
+  
+  /** \brief Normal estimation. */
+  pcl::NormalEstimation<PointT, pcl::Normal> g_ne;
+  
+  /** \brief Cloud of normals. */
+  pcl::PointCloud<pcl::Normal>::Ptr g_cloud_normals, g_cloud_normals2;
+  
+  /** \brief Nearest neighborhooh size for normal estimation. */
+  double g_k_nn;
+  
+  /** \brief SAC segmentation. */
+  pcl::SACSegmentationFromNormals<PointT, pcl::Normal> g_seg; 
+  
+  /** \brief Extract point cloud indices. */
+  pcl::ExtractIndices<PointT> g_extract_pc;
+
+  /** \brief Extract point cloud normal indices. */
+  pcl::ExtractIndices<pcl::Normal> g_extract_normals;
+  
+  /** \brief Point indices for plane. */
+  pcl::PointIndices::Ptr g_inliers_plane;
+    
+  /** \brief Point indices for cylinder. */
+  pcl::PointIndices::Ptr g_inliers_cylinder;
+  
+  /** \brief Model coefficients for the plane segmentation. */
+  pcl::ModelCoefficients::Ptr g_coeff_plane;
+  
+  /** \brief Model coefficients for the culinder segmentation. */
+  pcl::ModelCoefficients::Ptr g_coeff_cylinder;
+  
+  /** \brief Point cloud to hold plane and cylinder points. */
+  PointCPtr g_cloud_plane, g_cloud_cylinder;
+
+  geometry_msgs::Point crt_ee_position;
   
 };
 

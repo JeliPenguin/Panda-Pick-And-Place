@@ -13,8 +13,7 @@ int main(int argc, char **argv){
   // create an instance of the cw3 class
   cw3 cw_class(nh);
 
-  ros::Subscriber color_cloud_ = nh.subscribe<sensor_msgs::PointCloud2>("/r200/camera/depth_registered/points", 1, 
-      boost::bind(&cw3::cloudCallback, &cw_class, _1));
+  ros::Subscriber color_cloud = nh.subscribe("/r200/camera/depth_registered/points",1,&cw3::cloudCallback,&cw_class);
 
   // MoveIt! requirement for non-blocking group.move()
   ros::AsyncSpinner spinner(1);

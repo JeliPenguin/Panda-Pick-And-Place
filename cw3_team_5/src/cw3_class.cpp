@@ -7,7 +7,19 @@ solution is contained within the cw3_team_<your_team_number> package */
 
 ///////////////////////////////////////////////////////////////////////////////
 
-cw3::cw3(ros::NodeHandle nh)
+cw3::cw3(ros::NodeHandle nh):
+  g_cloud_ptr (new PointC), // input point cloud
+  g_cloud_filtered (new PointC), // filtered point cloud
+  g_cloud_filtered2 (new PointC), // filtered point cloud
+  g_cloud_plane (new PointC), // plane point cloud
+  g_cloud_cylinder (new PointC), // cylinder point cloud
+  g_tree_ptr (new pcl::search::KdTree<PointT> ()), // KdTree
+  g_cloud_normals (new pcl::PointCloud<pcl::Normal>), // segmentation
+  g_cloud_normals2 (new pcl::PointCloud<pcl::Normal>), // segmentation
+  g_inliers_plane (new pcl::PointIndices), // plane seg
+  g_inliers_cylinder (new pcl::PointIndices), // cylidenr seg
+  g_coeff_plane (new pcl::ModelCoefficients), // plane coeff
+  g_coeff_cylinder (new pcl::ModelCoefficients) // cylinder coeff
 {
   /* class constructor */
 
@@ -25,9 +37,13 @@ cw3::cw3(ros::NodeHandle nh)
   g_pub_cloud = nh_.advertise<sensor_msgs::PointCloud2> ("filtered_cloud", 1, true);
   g_pub_pose = nh_.advertise<geometry_msgs::PointStamped> ("cyld_pt", 1, true);
   
-  // Create a ROS subscriber for the input point cloud
-  // ros::Subscriber color_cloud_ = nh.subscribe<sensor_msgs::PointCloud2>("/r200/camera/depth_registered/points", 1, 
-      // boost::bind(&cw3::cloudCallback, this, _1));
+  // Define public variables
+  g_vg_leaf_sz = 0.01; // VoxelGrid leaf size: Better in a config file
+  g_pt_thrs_min = 0.0; // PassThrough min thres: Better in a config file
+  g_pt_thrs_max = 0.7; // PassThrough max thres: Better in a config file
+  g_k_nn = 50; // Normals nn size: Better in a config file
+
+  crt_ee_position.x = -9999;
 
   ROS_INFO("cw3 class initialised");
 }
@@ -57,6 +73,12 @@ cw3::t2_callback(cw3_world_spawner::Task2Service::Request &request,
 
   ROS_INFO("The coursework solving callback for task 2 has been triggered");
 
+  int number = t2(request.ref_object_points,request.mystery_object_point);
+
+  ROS_INFO("The mystery object num is: %d",number);
+
+  response.mystery_object_num = number;
+
   return true;
 }
 
@@ -76,20 +98,22 @@ cw3::t3_callback(cw3_world_spawner::Task3Service::Request &request,
 ///////////////////////////////////////////////////////////////////////////////
 
 void
-cw3::cloudCallback(const boost::shared_ptr<const sensor_msgs::PointCloud2>& msg) {
+cw3::cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg) {
   // ROS_INFO("PointCloud2 message received");
   // convert from ros' sensor_msg/PointCloud2 to pcl/PointCloud2
   pcl::PCLPointCloud2 pcl_cloud;
   pcl_conversions::toPCL(*msg, pcl_cloud);
 
   // convert pcl/PointCloud2 to PointCloud vector of PointXYZRGB
-  temp_cloud_.reset(new pcl::PointCloud<pcl::PointXYZRGB>); 
-  pcl::fromPCLPointCloud2(pcl_cloud, *temp_cloud_);
+  // rgb_cloud_.reset(new pcl::PointCloud<pcl::PointXYZRGB>); 
+  // pcl::fromPCLPointCloud2(pcl_cloud, *rgb_cloud_);
 
-  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr temp_cloud_rgba(new pcl::PointCloud<pcl::PointXYZRGBA>);
-  pcl::copyPointCloud(*temp_cloud_, *temp_cloud_rgba); // Convert from XYZRGB to XYZRGBA
+  g_cloud_ptr.reset(new PointC);
+  pcl::fromPCLPointCloud2 (pcl_cloud, *g_cloud_ptr);
 
-  pubFilteredPCMsg(g_pub_cloud, *temp_cloud_rgba);
+  // pcl::PointCloud<pcl::PointXYZRGBA>::Ptr temp_cloud_rgba(new pcl::PointCloud<pcl::PointXYZRGBA>);
+  // pcl::copyPointCloud(*cloud_filtered, *temp_cloud_rgba); // Convert from XYZRGB to XYZRGBA
+  // pubFilteredPCMsg(g_pub_cloud, *temp_cloud_rgba);
 
 }
 
@@ -234,32 +258,31 @@ cw3::moveGripper(float width)
   return success;
 }
 
-///////////////////////////////////////////////////////////////////////////////
 
-// Filter function with inputs as references to point cloud smart pointers
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr 
-cw3::filterPointCloudByColor(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr& input_cloud) {
-    pcl::ConditionalRemoval<pcl::PointXYZRGB> color_filter;
-    color_filter.setInputCloud(input_cloud);
+// // Filter function with inputs as references to point cloud smart pointers
+// pcl::PointCloud<pcl::PointXYZRGB>::Ptr 
+// cw3::filterPointCloudByHeight(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr& input_cloud) {
+//     pcl::ConditionalRemoval<pcl::PointXYZRGB> color_filter;
+//     color_filter.setInputCloud(input_cloud);
 
-    pcl::PackedRGBComparison<pcl::PointXYZRGB>::Ptr green_condition(new pcl::PackedRGBComparison<pcl::PointXYZRGB>("g",pcl::ComparisonOps::LT,54));
-    pcl::ConditionAnd<pcl::PointXYZRGB>::Ptr color_cond (new pcl::ConditionAnd<pcl::PointXYZRGB>());
-    color_cond->addComparison(green_condition);
-    color_filter.setCondition(color_cond);
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGB>);
-    color_filter.filter(*cloud_filtered);
+//     pcl::PackedRGBComparison<pcl::PointXYZRGB>::Ptr green_condition(new pcl::PackedRGBComparison<pcl::PointXYZRGB>("g",pcl::ComparisonOps::LT,54));
+//     pcl::ConditionAnd<pcl::PointXYZRGB>::Ptr color_cond (new pcl::ConditionAnd<pcl::PointXYZRGB>());
+//     color_cond->addComparison(green_condition);
+//     color_filter.setCondition(color_cond);
+//     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGB>);
+//     color_filter.filter(*cloud_filtered);
 
     
 
-    return cloud_filtered;
-}
+//     return cloud_filtered;
+// }
 
 ///////////////////////////////////////////////////////////////////////////////
 
 bool
 cw3::pick(geometry_msgs::Point object, 
-                  geometry_msgs::Point Goal,
-                  float angle)
+          geometry_msgs::Point Goal,
+          float angle)
 {
 
   geometry_msgs::Pose grasp_pose = moveAbove(object, angle);
@@ -292,6 +315,25 @@ cw3::pick(geometry_msgs::Point object,
   return true;
 }
 
+
+///////////////////////////////////////////////////////////////////////////////
+
+// Filter function with inputs as references to point cloud smart pointers
+PointCPtr 
+cw3::filterPointCloudByColor(PointCPtr &input_cloud) {
+    pcl::ConditionalRemoval<PointT> color_filter;
+    color_filter.setInputCloud(input_cloud);
+
+    pcl::PackedRGBComparison<PointT>::Ptr green_condition(new pcl::PackedRGBComparison<PointT>("g",pcl::ComparisonOps::LT,54));
+    pcl::ConditionAnd<PointT>::Ptr color_cond (new pcl::ConditionAnd<PointT>());
+    color_cond->addComparison(green_condition);
+    color_filter.setCondition(color_cond);
+    PointCPtr cloud_filtered(new PointC);
+    color_filter.filter(*cloud_filtered);
+
+    return cloud_filtered;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 bool 
@@ -304,25 +346,25 @@ cw3::t1(geometry_msgs::Point object,
 
   geometry_msgs::Pose target_pose = moveAbovePose(object);
   target_pose.position.z = 0.7; 
-  target_pose.position.x -= 0.03; 
+  target_pose.position.x += camera_offset_; 
   moveArm(target_pose);
+
+  // applyVX(g_cloud_ptr, g_cloud_filtered);
+  // findNormals(g_cloud_filtered);
+  // segPlane(g_cloud_filtered);    
+  // g_cloud_filtered_color = filterPointCloudByColor(g_cloud_filtered2);
+
+  g_cloud_filtered_color = filterPointCloudByColor(g_cloud_ptr);
+
+  pubFilteredPCMsg(g_pub_cloud, *g_cloud_filtered_color);
   
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr filtered_cloud = filterPointCloudByColor(temp_cloud_);
-
-  int num_points_before = temp_cloud_->size();
-
-  int num_points = filtered_cloud->size();
-
-  std::cout << "Before: "<< num_points_before << std::endl;
-  std::cout << "After: " << num_points << std::endl;
-  
-  // 计算质心
-  Eigen::Vector4f centroid;
-  pcl::compute3DCentroid(*filtered_cloud, centroid);
+  // // 计算质心
+  // Eigen::Vector4f centroid;
+  // pcl::compute3DCentroid(*g_cloud_filtered_color, centroid);
 
   // 应用PCA
-  pcl::PCA<pcl::PointXYZRGB> pca;
-  pca.setInputCloud(filtered_cloud);
+  pcl::PCA<PointT> pca;
+  pca.setInputCloud(g_cloud_filtered_color);
   Eigen::Vector3f eigenvalues = pca.getEigenValues();
   Eigen::Matrix3f eigenvectors = pca.getEigenVectors();
 
@@ -356,8 +398,92 @@ cw3::t1(geometry_msgs::Point object,
   }
   
   pick(object,target, -angle_radians);
-  
+
+  removeCollision(GROUND_COLLISION_);
+
   return true;
+}
+
+/////////////////////////////////////////////////////////////////////////
+
+std::string
+cw3::determineShape()
+{
+  std::string shape = "nought";
+
+  applyVX(g_cloud_ptr, g_cloud_filtered);
+  g_cloud_filtered_color = filterPointCloudByColor(g_cloud_filtered);
+
+  applyPassthrough(g_cloud_filtered_color,g_cloud_filtered_color,"x");
+
+  applyPassthrough(g_cloud_filtered_color,g_cloud_filtered_color,"y");
+
+  pubFilteredPCMsg(g_pub_cloud, *g_cloud_filtered_color);
+
+  float num_points = g_cloud_filtered_color->size();
+
+  if (num_points > 0)
+  {
+    return "cross";
+  }
+  return "nought";
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+float
+cw3::euclidDistance(geometry_msgs::Point p1,geometry_msgs::Point p2)
+{
+  double dx = p2.x - p1.x;
+  double dy = p2.y - p1.y;
+  double dz = p2.z - p1.z;
+  return std::sqrt(dx*dx + dy*dy + dz*dz);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+int
+cw3::t2(std::vector<geometry_msgs::PointStamped>& ref_object_points, geometry_msgs::PointStamped mystery_object_point)
+{
+  addGroundCollision();
+
+  std::vector<geometry_msgs::Point> togo(2);
+
+  if (crt_ee_position.x != -9999)
+  {
+    if (euclidDistance(crt_ee_position,mystery_object_point.point)<euclidDistance(crt_ee_position,ref_object_points[0].point))
+    {
+       togo[0] = mystery_object_point.point;
+       togo[1] = ref_object_points[0].point;
+    }else{
+      togo[0] = ref_object_points[0].point;
+      togo[1] = mystery_object_point.point;
+    }
+  }else{
+    togo[0] = mystery_object_point.point;
+    togo[1] = ref_object_points[0].point;
+  }
+
+  geometry_msgs::Pose target_pose;
+  std::array<std::string, 2> object_types;
+
+  for (size_t i = 0; i < 2; ++i) {
+      const auto& point = togo[i];
+      target_pose = moveAbovePose(point);
+      target_pose.position.z = 0.7; 
+      target_pose.position.x += camera_offset_; 
+      moveArm(target_pose);
+      object_types[i] = determineShape();
+  }
+
+  crt_ee_position = target_pose.position;
+
+  removeCollision(GROUND_COLLISION_);
+
+  if (object_types[0] == object_types[1]){
+    return 1;
+  }
+  return 2;
 }
 
 
@@ -374,7 +500,7 @@ cw3::addCollision(std::string object_name,
   
   // input header information
   collision_object.id = object_name;
-  collision_object.header.frame_id = base_frame_;
+  collision_object.header.frame_id = BASE_FRAME_;
 
   // define the primitive and its dimensions
   collision_object.primitives.resize(1);
@@ -417,13 +543,14 @@ cw3::removeCollision(std::string object_name)
   planning_scene_interface_.applyCollisionObjects(object_vector);
 }
 
+
 void
-cw3::addGroundCollision()
+cw3::addGroundCollision(float ground_height)
 {
   geometry_msgs::Vector3 ground_dimension;
   ground_dimension.x = 5;
   ground_dimension.y = 5;
-  ground_dimension.z = 0.02;
+  ground_dimension.z = ground_height;
 
   geometry_msgs::Point ground_position;
   ground_position.x = 0;
@@ -436,5 +563,129 @@ cw3::addGroundCollision()
   ground_orientation.y = 0;
   ground_orientation.z = 0;
 
-  addCollision("ground",ground_position,ground_dimension,ground_orientation);
+  addCollision(GROUND_COLLISION_,ground_position,ground_dimension,ground_orientation);
+}
+
+
+void
+cw3::applyPassthrough(PointCPtr &in_cloud_ptr,
+                      PointCPtr &out_cloud_ptr,
+                      std::string axis,
+                      float threshold)
+{
+  PointCPtr cloud_filtered_y(new PointC);
+  // Apply a pass-through filter on the y-axis
+  pcl::PassThrough<PointT> pass;
+  pass.setInputCloud(in_cloud_ptr); // Set the input point cloud
+  pass.setFilterFieldName(axis); // Set the filtering field to the x-axis
+  pass.setFilterLimits(-threshold, threshold); // Set the filtering range
+  pass.filter(*out_cloud_ptr); // Execute the filtering, result stored in cloud_filtered_x
+}
+
+void
+cw3::applyVX (PointCPtr &in_cloud_ptr,
+                      PointCPtr &out_cloud_ptr)
+{
+  g_vx.setInputCloud (in_cloud_ptr);
+  g_vx.setLeafSize (g_vg_leaf_sz, g_vg_leaf_sz, g_vg_leaf_sz);
+  g_vx.filter (*out_cloud_ptr);
+  
+  return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void
+cw3::applyPT (PointCPtr &in_cloud_ptr,
+                      PointCPtr &out_cloud_ptr)
+{
+  g_pt.setInputCloud (in_cloud_ptr);
+  g_pt.setFilterFieldName ("x");
+  g_pt.setFilterLimits (g_pt_thrs_min, g_pt_thrs_max);
+  g_pt.filter (*out_cloud_ptr);
+  
+  return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void
+cw3::findNormals (PointCPtr &in_cloud_ptr)
+{
+  // Estimate point normals
+  g_ne.setInputCloud (in_cloud_ptr);
+  g_ne.setSearchMethod (g_tree_ptr);
+  g_ne.setKSearch (g_k_nn);
+  g_ne.compute (*g_cloud_normals);
+  
+  return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void
+cw3::segPlane (PointCPtr &in_cloud_ptr)
+{
+  // Create the segmentation object for the planar model
+  // and set all the params
+  g_seg.setOptimizeCoefficients (true);
+  g_seg.setModelType (pcl::SACMODEL_NORMAL_PLANE);
+  g_seg.setNormalDistanceWeight (0.1); //bad style
+  g_seg.setMethodType (pcl::SAC_RANSAC);
+  g_seg.setMaxIterations (100); //bad style
+  g_seg.setDistanceThreshold (0.03); //bad style
+  g_seg.setInputCloud (in_cloud_ptr);
+  g_seg.setInputNormals (g_cloud_normals);
+  // Obtain the plane inliers and coefficients
+  g_seg.segment (*g_inliers_plane, *g_coeff_plane);
+  
+  // Extract the planar inliers from the input cloud
+  g_extract_pc.setInputCloud (in_cloud_ptr);
+  g_extract_pc.setIndices (g_inliers_plane);
+  g_extract_pc.setNegative (false);
+  
+  // Write the planar inliers to disk
+  g_extract_pc.filter (*g_cloud_plane);
+  
+  // Remove the planar inliers, extract the rest
+  g_extract_pc.setNegative (true);
+  g_extract_pc.filter (*g_cloud_filtered2);
+  g_extract_normals.setNegative (true);
+  g_extract_normals.setInputCloud (g_cloud_normals);
+  g_extract_normals.setIndices (g_inliers_plane);
+  g_extract_normals.filter (*g_cloud_normals2);
+
+  //ROS_INFO_STREAM ("Plane coefficients: " << *g_coeff_plane);
+  // ROS_INFO_STREAM ("PointCloud representing the planar component: "
+  //                  << g_cloud_plane->size ()
+  //                  << " data points.");
+}
+    
+////////////////////////////////////////////////////////////////////////////////
+void
+cw3::segCylind (PointCPtr &in_cloud_ptr)
+{
+  // Create the segmentation object for cylinder segmentation
+  // and set all the parameters
+  g_seg.setOptimizeCoefficients (true);
+  g_seg.setModelType (pcl::SACMODEL_CYLINDER);
+  g_seg.setMethodType (pcl::SAC_RANSAC);
+  g_seg.setNormalDistanceWeight (0.1); //bad style
+  g_seg.setMaxIterations (10000); //bad style
+  g_seg.setDistanceThreshold (0.05); //bad style
+  g_seg.setRadiusLimits (0, 0.1); //bad style
+  g_seg.setInputCloud (g_cloud_filtered2);
+  g_seg.setInputNormals (g_cloud_normals2);
+
+  // Obtain the cylinder inliers and coefficients
+  g_seg.segment (*g_inliers_cylinder, *g_coeff_cylinder);
+  
+  // Write the cylinder inliers to disk
+  g_extract_pc.setInputCloud (g_cloud_filtered2);
+  g_extract_pc.setIndices (g_inliers_cylinder);
+  g_extract_pc.setNegative (false);
+  g_extract_pc.filter (*g_cloud_cylinder);
+  
+  // ROS_INFO_STREAM ("PointCloud representing the cylinder component: "
+  //                  << g_cloud_cylinder->size ()
+  //                  << " data points.");
+  
+  return;
 }
