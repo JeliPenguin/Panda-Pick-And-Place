@@ -22,12 +22,12 @@ cw3::cw3(ros::NodeHandle nh)
     &cw3::t3_callback, this);
     
   // Define the publishers
-  g_pub_cloud = nh.advertise<sensor_msgs::PointCloud2> ("filtered_cloud", 1, true);
-  g_pub_pose = nh.advertise<geometry_msgs::PointStamped> ("cyld_pt", 1, true);
+  g_pub_cloud = nh_.advertise<sensor_msgs::PointCloud2> ("filtered_cloud", 1, true);
+  g_pub_pose = nh_.advertise<geometry_msgs::PointStamped> ("cyld_pt", 1, true);
   
   // Create a ROS subscriber for the input point cloud
-  ros::Subscriber color_cloud_ = nh.subscribe<sensor_msgs::PointCloud2>("/r200/camera/depth_registered/points", 1, 
-      boost::bind(&cw3::cloudCallback, this, _1));
+  // ros::Subscriber color_cloud_ = nh.subscribe<sensor_msgs::PointCloud2>("/r200/camera/depth_registered/points", 1, 
+      // boost::bind(&cw3::cloudCallback, this, _1));
 
   ROS_INFO("cw3 class initialised");
 }
@@ -72,6 +72,62 @@ cw3::t3_callback(cw3_world_spawner::Task3Service::Request &request,
 
   return true;
 }
+
+///////////////////////////////////////////////////////////////////////////////
+
+void
+cw3::cloudCallback(const boost::shared_ptr<const sensor_msgs::PointCloud2>& msg) {
+  // ROS_INFO("PointCloud2 message received");
+  // convert from ros' sensor_msg/PointCloud2 to pcl/PointCloud2
+  pcl::PCLPointCloud2 pcl_cloud;
+  pcl_conversions::toPCL(*msg, pcl_cloud);
+
+  // convert pcl/PointCloud2 to PointCloud vector of PointXYZRGB
+  temp_cloud_.reset(new pcl::PointCloud<pcl::PointXYZRGB>); 
+  pcl::fromPCLPointCloud2(pcl_cloud, *temp_cloud_);
+
+  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr temp_cloud_rgba(new pcl::PointCloud<pcl::PointXYZRGBA>);
+  pcl::copyPointCloud(*temp_cloud_, *temp_cloud_rgba); // Convert from XYZRGB to XYZRGBA
+
+  pubFilteredPCMsg(g_pub_cloud, *temp_cloud_rgba);
+
+}
+
+void
+cw3::pubFilteredPCMsg (ros::Publisher &pc_pub,
+                               PointC &pc)
+{
+  // Publish the data
+  sensor_msgs::PointCloud2 g_cloud_filtered_msg;
+  pcl::toROSMsg(pc, g_cloud_filtered_msg);
+  pc_pub.publish (g_cloud_filtered_msg);
+  
+  return;
+}
+
+
+geometry_msgs::PointStamped
+cw3::frameTransform(geometry_msgs::Point from_p, std::string from_frame, std::string to_frame){
+  // Temporary storage for transformation.
+  geometry_msgs::PointStamped from_p_stamped;
+  geometry_msgs::PointStamped to_p;
+
+  // Prepare for coordinate frame transformation.
+  from_p_stamped.header.frame_id = from_frame;
+  from_p_stamped.point.x = from_p.x;
+  from_p_stamped.point.y = from_p.y;
+  from_p_stamped.point.z = from_p.z;
+
+  try {
+      // Transform centroid to "panda_link0" frame.
+      listener_.transformPoint(to_frame, from_p_stamped, to_p);
+  } catch (tf::TransformException& ex) {
+      ROS_ERROR("Received a transformation exception: %s", ex.what());
+  }
+
+  return to_p;
+}
+
 
 ///////////////////////////////////////////////////////////////////////////////
 // Task 1
@@ -180,22 +236,6 @@ cw3::moveGripper(float width)
 
 ///////////////////////////////////////////////////////////////////////////////
 
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr
-cw3::cloudCallback(const boost::shared_ptr<const sensor_msgs::PointCloud2>& msg) {
-  // ROS_INFO("PointCloud2 message received");
-  // convert from ros' sensor_msg/PointCloud2 to pcl/PointCloud2
-  pcl::PCLPointCloud2 cloud;
-  pcl_conversions::toPCL(*msg, cloud);
-
-  // convert pcl/PointCloud2 to PointCloud vector of PointXYZRGB
-    temp_cloud.reset(new pcl::PointCloud<pcl::PointXYZRGB>); 
-    pcl::fromPCLPointCloud2(cloud, *temp_cloud);
-  
-  return temp_cloud;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
 // Filter function with inputs as references to point cloud smart pointers
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr 
 cw3::filterPointCloudByColor(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr& input_cloud) {
@@ -267,14 +307,14 @@ cw3::t1(geometry_msgs::Point object,
   target_pose.position.x -= 0.03; 
   moveArm(target_pose);
   
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr filtered_cloud = filterPointCloudByColor(temp_cloud);
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr filtered_cloud = filterPointCloudByColor(temp_cloud_);
 
-  // float num_points_before = temp_cloud->size();
+  int num_points_before = temp_cloud_->size();
 
-  // int num_points = filtered_cloud->size();
+  int num_points = filtered_cloud->size();
 
-  // std::cout << num_points_before << std::endl;
-  // std::cout << num_points << std::endl;
+  std::cout << "Before: "<< num_points_before << std::endl;
+  std::cout << "After: " << num_points << std::endl;
   
   // 计算质心
   Eigen::Vector4f centroid;
@@ -289,33 +329,33 @@ cw3::t1(geometry_msgs::Point object,
   // 主轴方向是最大特征值对应的特征向量
   Eigen::Vector3f principal_axis = eigenvectors.col(0);
   
-  // // 计算夹角
-  // Eigen::Vector3f global_y_axis(0, 1, 0);
-  // float cosine_of_angle = principal_axis.dot(global_y_axis) / (principal_axis.norm() * global_y_axis.norm());
-  // float angle_radians = acos(cosine_of_angle);
+  // 计算夹角
+  Eigen::Vector3f global_y_axis(0, 1, 0);
+  float cosine_of_angle = principal_axis.dot(global_y_axis) / (principal_axis.norm() * global_y_axis.norm());
+  float angle_radians = acos(cosine_of_angle);
   
-  // // 避免钝角，使角度为锐角
-  // if (angle_radians > M_PI / 2) angle_radians -= M_PI;
-  // else if (angle_radians < -M_PI / 2) angle_radians += M_PI;
+  // 避免钝角，使角度为锐角
+  if (angle_radians > M_PI / 2) angle_radians -= M_PI;
+  else if (angle_radians < -M_PI / 2) angle_radians += M_PI;
 
-  // // 限制角度在-π/4到π/4之间
-  // if (angle_radians > M_PI / 4) angle_radians -= M_PI/2;
-  // else if (angle_radians < -M_PI / 4) angle_radians += M_PI/2;
+  // 限制角度在-π/4到π/4之间
+  if (angle_radians > M_PI / 4) angle_radians -= M_PI/2;
+  else if (angle_radians < -M_PI / 4) angle_radians += M_PI/2;
   
-  // // Positional offsets for pick and place
-  // if(shape_type == "cross"){
-  //   object.x += size * cos(angle_radians);
-  //   object.y += size * sin(angle_radians);
-  //   target.x += size;
+  // Positional offsets for pick and place
+  if(shape_type == "cross"){
+    object.x += size * cos(angle_radians);
+    object.y += size * sin(angle_radians);
+    target.x += size;
     
-  // }else{
-  //   object.x += 2 * size * sin(angle_radians);
-  //   object.y += 2 * size * cos(angle_radians);
-  //   target.y += 2 * size;
+  }else{
+    object.x += 2 * size * sin(angle_radians);
+    object.y += 2 * size * cos(angle_radians);
+    target.y += 2 * size;
 
-  // }
+  }
   
-  // pick(object,target, -angle_radians);
+  pick(object,target, -angle_radians);
   
   return true;
 }

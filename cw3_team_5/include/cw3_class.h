@@ -100,12 +100,15 @@ public:
   bool 
   moveGripper(float width);
   
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr
+  void
   cloudCallback(const boost::shared_ptr<const sensor_msgs::PointCloud2>& msg);
-  
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr temp_cloud;
-  
-  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
+
+  void
+  pubFilteredPCMsg (ros::Publisher &pc_pub,
+                               PointC &pc);
+
+  geometry_msgs::PointStamped
+  frameTransform(geometry_msgs::Point from_p, std::string from_frame, std::string to_frame);
 
 
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr 
@@ -138,7 +141,11 @@ public:
   ros::ServiceServer t2_service_;
   ros::ServiceServer t3_service_;
 
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr temp_cloud_;
+  // pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
+
   std::string base_frame_ = "panda_link0";
+  std::string camera_frame_ = "color";
   
    /** \brief MoveIt interface to move groups to seperate the arm and the gripper,
   * these are defined in urdf. */
@@ -149,6 +156,7 @@ public:
     * (eg collision objects). */
   moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
   
+  tf::TransformListener listener_;
   
 };
 
