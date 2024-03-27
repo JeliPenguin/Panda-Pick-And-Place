@@ -105,10 +105,6 @@ public:
 
   geometry_msgs::PointStamped
   frameTransform(geometry_msgs::Point from_p, std::string from_frame, std::string to_frame);
-
-
-  PointCPtr 
-  filterPointCloudByColor(PointCPtr &input_cloud);
   
   bool
   pick(geometry_msgs::Point object, 
@@ -143,6 +139,9 @@ public:
 
   void
   addGroundCollision(float ground_height=0.02);
+
+  PointCPtr 
+  applyGroundFilter(PointCPtr &input_cloud);
 
   void
   applyPassthrough(PointCPtr &in_cloud_ptr,
