@@ -787,7 +787,6 @@ cw3::segCylind (PointCPtr &in_cloud_ptr)
   
   return;
 }
-<<<<<<< HEAD
 
 /**
  * @brief Performs DBSCAN clustering on a given point cloud.
@@ -829,5 +828,3 @@ cw3::dbscanClustering(PointCPtr &cloud) {
  
     return cluster_indices;
 }
-=======
->>>>>>> 577d73115a59bbd05829277a8c261509645a1cd9
