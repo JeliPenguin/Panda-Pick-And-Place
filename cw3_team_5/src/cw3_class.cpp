@@ -497,9 +497,26 @@ cw3::t2(std::vector<geometry_msgs::PointStamped>& ref_object_points, geometry_ms
 std::array<int, 2>
 cw3::t3()
 {
+  addGroundCollision();
+
   std::array<int, 2> res;
   res[0] = 1;
   res[1] = 1;
+
+  geometry_msgs::Pose target_pose;
+  geometry_msgs::Point point;
+  point.x = 0.32;
+  point.y = 0;
+  target_pose = moveAbovePose(point);
+  target_pose.position.z = 0.91; 
+  target_pose.position.x += camera_offset_; 
+  moveArm(target_pose);
+
+  pubFilteredPCMsg(g_pub_cloud, *g_cloud_ptr);
+
+
+  removeCollision(GROUND_COLLISION_);
+
   return res;
 }
 
