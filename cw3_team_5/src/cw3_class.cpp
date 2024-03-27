@@ -332,25 +332,25 @@ cw3::t1(geometry_msgs::Point object,
   // Eigen::Vector4f centroid;
   // pcl::compute3DCentroid(*g_cloud_filtered, centroid);
 
-  // 应用PCA
+  // Applied PCA
   pcl::PCA<PointT> pca;
   pca.setInputCloud(g_cloud_filtered);
   Eigen::Vector3f eigenvalues = pca.getEigenValues();
   Eigen::Matrix3f eigenvectors = pca.getEigenVectors();
 
-  // 主轴方向是最大特征值对应的特征向量
+  // The principal axis direction is the eigenvector corresponding to the largest eigenvalue
   Eigen::Vector3f principal_axis = eigenvectors.col(0);
   
-  // 计算夹角
+  // Calculate angle
   Eigen::Vector3f global_y_axis(0, 1, 0);
   float cosine_of_angle = principal_axis.dot(global_y_axis) / (principal_axis.norm() * global_y_axis.norm());
   float angle_radians = acos(cosine_of_angle);
   
-  // 避免钝角，使角度为锐角
+  // Avoid obtuse angles, make angles acute
   if (angle_radians > M_PI / 2) angle_radians -= M_PI;
   else if (angle_radians < -M_PI / 2) angle_radians += M_PI;
 
-  // 限制角度在-π/4到π/4之间
+  // Restriction angle between -π/4 and π/4
   if (angle_radians > M_PI / 4) angle_radians -= M_PI/2;
   else if (angle_radians < -M_PI / 4) angle_radians += M_PI/2;
   
