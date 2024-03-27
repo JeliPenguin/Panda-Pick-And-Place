@@ -39,6 +39,11 @@ solution is contained within the cw3_team_<your_team_number> package */
 #include <pcl/visualization/pcl_visualizer.h>
 #include <tf/transform_listener.h>
 #include <pcl/features/moment_of_inertia_estimation.h>
+#include <pcl/registration/icp.h>
+
+#include <octomap/octomap.h>
+#include <octomap_msgs/Octomap.h>
+#include <octomap_msgs/conversions.h>
 
 // Set default pointcloud types
 typedef pcl::PointXYZRGBA PointT;
@@ -64,6 +69,10 @@ public:
   
   /** \brief ROS publishers. */
   ros::Publisher g_pub_cloud;
+
+  ros::Publisher full_scene_pub_cloud;
+
+  ros::Publisher octomap_publisher;
   
   /** \brief ROS pose publishers. */
   ros::Publisher g_pub_pose;
@@ -122,10 +131,10 @@ public:
   float
   euclidDistance(geometry_msgs::Point p1,geometry_msgs::Point p2);
 
-  int
+  int64_t
   t2(std::vector<geometry_msgs::PointStamped>& ref_object_points, geometry_msgs::PointStamped mystery_object_point);
 
-  std::array<int, 2>
+  std::array<int64_t, 2>
   t3();
 
   void
@@ -191,6 +200,9 @@ public:
     */
   void
   segCylind (PointCPtr &in_cloud_ptr);
+
+  std::vector<pcl::PointIndices> 
+  dbscanClustering(PointCPtr &cloud);
 
 
   ros::NodeHandle nh_;
@@ -283,13 +295,15 @@ public:
   PointCPtr g_cloud_plane, g_cloud_cylinder;
 
   geometry_msgs::Point crt_ee_position;
-  
-};
 
-// Angle offset to align gripper with cube
+  // Angle offset to align gripper with cube
   double angle_offset_ = 3.14159 / 4.0;
   double gripper_open_ = 80e-3;
   double gripper_closed_ = 0.0;
   double camera_offset_ = -0.04;
+
+  bool add_scene_ = false;
+  
+};
 
 #endif // end of include guard for cw3_CLASS_H_

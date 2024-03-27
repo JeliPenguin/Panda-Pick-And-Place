@@ -35,7 +35,9 @@ cw3::cw3(ros::NodeHandle nh):
     
   // Define the publishers
   g_pub_cloud = nh_.advertise<sensor_msgs::PointCloud2> ("filtered_cloud", 1, true);
+  full_scene_pub_cloud = nh_.advertise<sensor_msgs::PointCloud2> ("full_scene", 1, true);
   g_pub_pose = nh_.advertise<geometry_msgs::PointStamped> ("cyld_pt", 1, true);
+  octomap_publisher = nh.advertise<octomap_msgs::Octomap>("/octomap", 1);
   
   // Define public variables
   g_vg_leaf_sz = 0.01; // VoxelGrid leaf size: Better in a config file
@@ -73,9 +75,9 @@ cw3::t2_callback(cw3_world_spawner::Task2Service::Request &request,
 
   ROS_INFO("The coursework solving callback for task 2 has been triggered");
 
-  int number = t2(request.ref_object_points,request.mystery_object_point);
+  int64_t number = t2(request.ref_object_points,request.mystery_object_point);
 
-  ROS_INFO("The mystery object num is: %d",number);
+  ROS_INFO("The mystery object num is: %ld",number);
 
   response.mystery_object_num = number;
 
@@ -92,13 +94,13 @@ cw3::t3_callback(cw3_world_spawner::Task3Service::Request &request,
 
   ROS_INFO("The coursework solving callback for task 3 has been triggered");
 
-  std::array<int, 2> res = t3();
+  std::array<int64_t, 2> res = t3();
 
   response.total_num_shapes = res[0];
   response.num_most_common_shape = res[1];
 
-  ROS_INFO("Total number of shapes: %d",res[0]);
-  ROS_INFO("Number of most common shape: %d",res[1]);
+  ROS_INFO("Total number of shapes: %ld",res[0]);
+  ROS_INFO("Number of most common shape: %ld",res[1]);
 
   return true;
 }
@@ -116,7 +118,7 @@ cw3::cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg) {
   // rgb_cloud_.reset(new pcl::PointCloud<pcl::PointXYZRGB>); 
   // pcl::fromPCLPointCloud2(pcl_cloud, *rgb_cloud_);
 
-  g_cloud_ptr.reset(new PointC);
+  // g_cloud_ptr.reset(new PointC);
   pcl::fromPCLPointCloud2 (pcl_cloud, *g_cloud_ptr);
 
   // pcl::PointCloud<pcl::PointXYZRGBA>::Ptr temp_cloud_rgba(new pcl::PointCloud<pcl::PointXYZRGBA>);
@@ -130,9 +132,9 @@ cw3::pubFilteredPCMsg (ros::Publisher &pc_pub,
                                PointC &pc)
 {
   // Publish the data
-  sensor_msgs::PointCloud2 g_cloud_filtered_msg;
-  pcl::toROSMsg(pc, g_cloud_filtered_msg);
-  pc_pub.publish (g_cloud_filtered_msg);
+  sensor_msgs::PointCloud2 g_cloud_msg;
+  pcl::toROSMsg(pc, g_cloud_msg);
+  pc_pub.publish (g_cloud_msg);
   
   return;
 }
@@ -203,6 +205,10 @@ cw3::moveArm(geometry_msgs::Pose target_pose)
   // google 'c++ conditional operator' to understand this line
   ROS_INFO("Visualising plan %s", success ? "" : "FAILED");
 
+  if (success)
+  {
+    crt_ee_position = target_pose.position;
+  }
   // execute the planned path
   arm_group_.move();
 
@@ -413,7 +419,7 @@ cw3::euclidDistance(geometry_msgs::Point p1,geometry_msgs::Point p2)
 
 ///////////////////////////////////////////////////////////////////////////////
 
-int
+int64_t
 cw3::t2(std::vector<geometry_msgs::PointStamped>& ref_object_points, geometry_msgs::PointStamped mystery_object_point)
 {
   addGroundCollision();
@@ -447,8 +453,6 @@ cw3::t2(std::vector<geometry_msgs::PointStamped>& ref_object_points, geometry_ms
       object_types[i] = determineShape();
   }
 
-  crt_ee_position = target_pose.position;
-
   removeCollision(GROUND_COLLISION_);
 
   if (object_types[0] == object_types[1]){
@@ -457,38 +461,92 @@ cw3::t2(std::vector<geometry_msgs::PointStamped>& ref_object_points, geometry_ms
   return 2;
 }
 
-std::array<int, 2>
+std::array<int64_t, 2>
 cw3::t3()
 {
+  // PointCPtr full_scene_cloud_ptr(new PointC);
   addGroundCollision();
 
-  std::array<int, 2> res;
+  std::vector<geometry_msgs::Point> corners(4);
+  geometry_msgs::Point point1;
+  point1.x = 0.36;
+  point1.y = 0.2;
+  point1.z = 0.8;
+
+  geometry_msgs::Point point2;
+  point2.x = 0.36;
+  point2.y = -0.2;
+  point2.z = 0.8;
+
+  geometry_msgs::Point point3;
+  point3.x = -0.36;
+  point3.y = -0.2;
+  point3.z = 0.8;
+
+  geometry_msgs::Point point3;
+  point3.x = -0.36;
+  point3.y = 0.2;
+  point3.z = 0.8;
+
+  corners[0] = point1;
+  corners[1] = point2;
+  corners[2] = point3;
+  corners[3] = point4;
+
+  std::array<int64_t, 2> res;
   res[0] = 1;
   res[1] = 1;
 
   geometry_msgs::Pose target_pose;
   geometry_msgs::Point point;
 
-  point.x = 0.31;
-  point.y = 0.0;
-  point.z = 0.8;
-  target_pose = moveAbovePose(point);
-  target_pose.position.x += camera_offset_; 
+  for (size_t i = 0; i < 4; ++i) {
+      const auto& point = corners[i];
+      target_pose = moveAbovePose(point);
+      moveArm(target_pose);
+      octomap::OcTree tree(0.05); // Adjust resolution as needed
+      applyGroundFilter(g_cloud_ptr,g_cloud_filtered);
 
+      for (const auto& point : *g_cloud_filtered) {
+          tree.updateNode(octomap::point3d(point.x, point.y, point.z), true); // Mark the cell as occupied
+      }
+      // Publish OctoMap
+      octomap_msgs::Octomap octomap_msg;
+      octomap_msgs::fullMapToMsg(tree, octomap_msg);
 
-  moveArm(target_pose);
+      octomap_msg.header.frame_id = g_cloud_filtered->header.frame_id;
+      octomap_msg.header.stamp = pcl_conversions::fromPCL(g_cloud_filtered->header.stamp);
+      octomap_publisher.publish(octomap_msg);
+  }
 
-  applyVX(g_cloud_ptr, g_cloud_filtered);
+  // ROS_INFO("Scene Added");
 
-  applyGroundFilter(g_cloud_filtered,g_cloud_filtered);
-
-  applyBlackFilter(g_cloud_filtered,g_cloud_filtered);
+  // arm_group_.setMaxVelocityScalingFactor(0.05);
   
+  // applyGroundFilter(g_cloud_ptr,g_cloud_filtered);
 
-  pubFilteredPCMsg(g_pub_cloud, *g_cloud_filtered);
+  // applyBlackFilter(g_cloud_filtered,g_cloud_filtered);
 
+  // pubFilteredPCMsg(g_pub_cloud, *g_cloud_filtered);
+
+  // applyVX(g_cloud_ptr, g_cloud_filtered);
+
+  // pcl::IterativeClosestPoint<PointT, PointT> icp;
+  // icp.setInputSource(full_scene_cloud_ptr); //This cloud will be transformed to match
+  // icp.setInputTarget(g_cloud_filtered); //this cloud. The result is stored in the cloud provided as input below.
+
+
+  // icp.align(*full_scene_cloud_ptr); //Overwrite the source cloud with the transformed cloud.
+
+  // *full_scene_cloud_ptr += *g_cloud_filtered; //Merge the two now aligned and matched clouds.
+
+  // ROS_INFO("Scene Added");
+
+  // pubFilteredPCMsg(full_scene_pub_cloud, *full_scene_cloud_ptr);
 
   removeCollision(GROUND_COLLISION_);
+
+  arm_group_.setMaxVelocityScalingFactor(0.1);
 
   return res;
 }
@@ -577,7 +635,7 @@ void
 cw3::applyBlackFilter(PointCPtr &input_cloud, PointCPtr &output_cloud) {
     pcl::ConditionalRemoval<PointT> color_filter;
     color_filter.setInputCloud(input_cloud);
-
+    
     pcl::PackedRGBComparison<PointT>::Ptr red_condition(new pcl::PackedRGBComparison<PointT>("r",pcl::ComparisonOps::GT,10));
     pcl::PackedRGBComparison<PointT>::Ptr green_condition(new pcl::PackedRGBComparison<PointT>("g",pcl::ComparisonOps::GT,10));
     pcl::PackedRGBComparison<PointT>::Ptr blue_condition(new pcl::PackedRGBComparison<PointT>("b",pcl::ComparisonOps::GT,10));
@@ -728,4 +786,45 @@ cw3::segCylind (PointCPtr &in_cloud_ptr)
   //                  << " data points.");
   
   return;
+}
+
+/**
+ * @brief Performs DBSCAN clustering on a given point cloud.
+ *
+ * Modifies the Z coordinates of all points in the cloud to 0, effectively flattening the cloud
+ * for 2D clustering. It uses a KdTree for efficient neighbor search in the clustering process.
+ * The DBSCAN clustering parameters—cluster tolerance, minimum cluster size, and maximum cluster
+ * size—are set before extracting the clusters.
+ *
+ * @param cloud A shared pointer to the input point cloud (pcl::PointCloud<pcl::PointXYZRGB>).
+ * This cloud is modified in-place by setting the Z coordinates of all points to 0.
+ *
+ * @return A vector of pcl::PointIndices, where each pcl::PointIndices object contains the indices
+ * of the points belonging to a cluster. The size of the vector indicates the number of clusters found.
+ *
+ * @note The function modifies the input cloud by flattening it to Z=0 for all points.
+ */
+std::vector<pcl::PointIndices> 
+cw3::dbscanClustering(PointCPtr &cloud) {
+    // Set the Z coordinates of all points to 0
+    for (auto &point : *cloud) {
+        point.z = 0.0;
+    }
+
+    // Creating a KdTree object for finding neighbors
+    pcl::search::KdTree<PointT>::Ptr tree(new pcl::search::KdTree<PointT>());
+    tree->setInputCloud(cloud);
+
+    // Create DBSCAN clustering object and set parameters
+    std::vector<pcl::PointIndices> cluster_indices;
+    pcl::EuclideanClusterExtraction<PointT> ec;
+    ec.setClusterTolerance(0.02); // 2cm search radius
+    ec.setMinClusterSize(300);   // Minimum Cluster Size
+    ec.setMaxClusterSize(10000);  // Maximum cluster size
+    ec.setSearchMethod(tree);
+    ec.setInputCloud(cloud);
+    ec.extract(cluster_indices);
+
+ 
+    return cluster_indices;
 }
