@@ -324,17 +324,17 @@ cw3::t1(geometry_msgs::Point object,
   // segPlane(g_cloud_filtered);    
   // g_cloud_filtered_color = applyGroundFilter(g_cloud_filtered2);
 
-  g_cloud_filtered_color = applyGroundFilter(g_cloud_ptr);
+  applyGroundFilter(g_cloud_ptr,g_cloud_filtered);
 
-  pubFilteredPCMsg(g_pub_cloud, *g_cloud_filtered_color);
+  pubFilteredPCMsg(g_pub_cloud, *g_cloud_filtered);
   
   // // 计算质心
   // Eigen::Vector4f centroid;
-  // pcl::compute3DCentroid(*g_cloud_filtered_color, centroid);
+  // pcl::compute3DCentroid(*g_cloud_filtered, centroid);
 
   // 应用PCA
   pcl::PCA<PointT> pca;
-  pca.setInputCloud(g_cloud_filtered_color);
+  pca.setInputCloud(g_cloud_filtered);
   Eigen::Vector3f eigenvalues = pca.getEigenValues();
   Eigen::Matrix3f eigenvectors = pca.getEigenVectors();
 
@@ -382,15 +382,16 @@ cw3::determineShape()
   std::string shape = "nought";
 
   applyVX(g_cloud_ptr, g_cloud_filtered);
-  g_cloud_filtered_color = applyGroundFilter(g_cloud_filtered);
 
-  applyPassthrough(g_cloud_filtered_color,g_cloud_filtered_color,"x");
+  applyGroundFilter(g_cloud_filtered,g_cloud_filtered);
 
-  applyPassthrough(g_cloud_filtered_color,g_cloud_filtered_color,"y");
+  applyPassthrough(g_cloud_filtered,g_cloud_filtered,"x");
 
-  pubFilteredPCMsg(g_pub_cloud, *g_cloud_filtered_color);
+  applyPassthrough(g_cloud_filtered,g_cloud_filtered,"y");
 
-  float num_points = g_cloud_filtered_color->size();
+  pubFilteredPCMsg(g_pub_cloud, *g_cloud_filtered);
+
+  float num_points = g_cloud_filtered->size();
 
   if (num_points > 0)
   {
@@ -468,24 +469,23 @@ cw3::t3()
   geometry_msgs::Pose target_pose;
   geometry_msgs::Point point;
 
-  tf2::Quaternion q_1(-1, 0, 0, 0), q_2, q_3;
-  q_2.setRPY(0, 0, M_PI / 4);
-  q_3.setRPY(0, 0, -M_PI / 4);
-  geometry_msgs::Quaternion detect_Orien_1 = tf2::toMsg(q_1 * q_2);
-  geometry_msgs::Quaternion detect_Orien_2 = tf2::toMsg(q_1 * q_3);
-
-  point.x = 0.32;
-  point.y = 0.12;
+  point.x = 0.31;
+  point.y = 0.0;
   point.z = 0.8;
-  // target_pose = moveAbovePose(point);
-  // target_pose.position.x += camera_offset_; 
+  target_pose = moveAbovePose(point);
+  target_pose.position.x += camera_offset_; 
 
-  target_pose.position = point;
-  target_pose.orientation = detect_Orien_1;
 
   moveArm(target_pose);
 
-  pubFilteredPCMsg(g_pub_cloud, *g_cloud_ptr);
+  applyVX(g_cloud_ptr, g_cloud_filtered);
+
+  applyGroundFilter(g_cloud_filtered,g_cloud_filtered);
+
+  applyBlackFilter(g_cloud_filtered,g_cloud_filtered);
+  
+
+  pubFilteredPCMsg(g_pub_cloud, *g_cloud_filtered);
 
 
   removeCollision(GROUND_COLLISION_);
@@ -573,12 +573,29 @@ cw3::addGroundCollision(float ground_height)
   addCollision(GROUND_COLLISION_,ground_position,ground_dimension,ground_orientation);
 }
 
+void 
+cw3::applyBlackFilter(PointCPtr &input_cloud, PointCPtr &output_cloud) {
+    pcl::ConditionalRemoval<PointT> color_filter;
+    color_filter.setInputCloud(input_cloud);
+
+    pcl::PackedRGBComparison<PointT>::Ptr red_condition(new pcl::PackedRGBComparison<PointT>("r",pcl::ComparisonOps::GT,10));
+    pcl::PackedRGBComparison<PointT>::Ptr green_condition(new pcl::PackedRGBComparison<PointT>("g",pcl::ComparisonOps::GT,10));
+    pcl::PackedRGBComparison<PointT>::Ptr blue_condition(new pcl::PackedRGBComparison<PointT>("b",pcl::ComparisonOps::GT,10));
+    pcl::ConditionAnd<PointT>::Ptr color_cond (new pcl::ConditionAnd<PointT>());
+    color_cond->addComparison(red_condition);
+    color_cond->addComparison(green_condition);
+    color_cond->addComparison(blue_condition);
+    color_filter.setCondition(color_cond);
+    color_filter.filter(*output_cloud);
+}
+
+
 
 ///////////////////////////////////////////////////////////////////////////////
 
 // Filter function with inputs as references to point cloud smart pointers
-PointCPtr 
-cw3::applyGroundFilter(PointCPtr &input_cloud) {
+void 
+cw3::applyGroundFilter(PointCPtr &input_cloud, PointCPtr &output_cloud) {
     pcl::ConditionalRemoval<PointT> color_filter;
     color_filter.setInputCloud(input_cloud);
 
@@ -586,10 +603,7 @@ cw3::applyGroundFilter(PointCPtr &input_cloud) {
     pcl::ConditionAnd<PointT>::Ptr color_cond (new pcl::ConditionAnd<PointT>());
     color_cond->addComparison(green_condition);
     color_filter.setCondition(color_cond);
-    PointCPtr cloud_filtered(new PointC);
-    color_filter.filter(*cloud_filtered);
-
-    return cloud_filtered;
+    color_filter.filter(*output_cloud);
 }
 
 

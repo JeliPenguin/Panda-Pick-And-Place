@@ -140,8 +140,11 @@ public:
   void
   addGroundCollision(float ground_height=0.02);
 
-  PointCPtr 
-  applyGroundFilter(PointCPtr &input_cloud);
+  void 
+  applyGroundFilter(PointCPtr &input_cloud, PointCPtr &output_cloud);
+
+  void 
+  applyBlackFilter(PointCPtr &input_cloud, PointCPtr &output_cloud);
 
   void
   applyPassthrough(PointCPtr &in_cloud_ptr,
