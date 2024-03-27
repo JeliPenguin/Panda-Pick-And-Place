@@ -92,6 +92,14 @@ cw3::t3_callback(cw3_world_spawner::Task3Service::Request &request,
 
   ROS_INFO("The coursework solving callback for task 3 has been triggered");
 
+  std::array<int, 2> res = t3();
+
+  response.total_num_shapes = res[0];
+  response.num_most_common_shape = res[1];
+
+  ROS_INFO("Total number of shapes: %d",res[0]);
+  ROS_INFO("Number of most common shape: %d",res[1]);
+
   return true;
 }
 
@@ -484,6 +492,15 @@ cw3::t2(std::vector<geometry_msgs::PointStamped>& ref_object_points, geometry_ms
     return 1;
   }
   return 2;
+}
+
+std::array<int, 2>
+cw3::t3()
+{
+  std::array<int, 2> res;
+  res[0] = 1;
+  res[1] = 1;
+  return res;
 }
 
 

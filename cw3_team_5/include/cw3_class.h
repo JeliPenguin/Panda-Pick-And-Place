@@ -129,6 +129,9 @@ public:
   int
   t2(std::vector<geometry_msgs::PointStamped>& ref_object_points, geometry_msgs::PointStamped mystery_object_point);
 
+  std::array<int, 2>
+  t3();
+
   void
   addCollision(std::string object_name,
                 geometry_msgs::Point centre, 
