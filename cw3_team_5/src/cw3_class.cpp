@@ -38,6 +38,8 @@ cw3::cw3(ros::NodeHandle nh):
   full_scene_pub_cloud = nh_.advertise<sensor_msgs::PointCloud2> ("full_scene", 1, true);
   g_pub_pose = nh_.advertise<geometry_msgs::PointStamped> ("cyld_pt", 1, true);
   octomap_publisher = nh.advertise<octomap_msgs::Octomap>("/octomap", 1);
+
+  marker_pub = nh_.advertise<visualization_msgs::Marker>("visualization_marker", 1);
   
   // Define public variables
   g_vg_leaf_sz = 0.01; // VoxelGrid leaf size: Better in a config file
@@ -461,23 +463,9 @@ cw3::t2(std::vector<geometry_msgs::PointStamped>& ref_object_points, geometry_ms
   return 2;
 }
 
-std::array<int64_t, 2>
-cw3::t3()
+PointCPtr
+cw3::scanEnvironment()
 {
-  // PointCPtr full_scene_cloud_ptr(new PointC);
-  addGroundCollision();
-
-  std::vector<geometry_msgs::Point> corners(4);
-
-  // geometry_msgs::Point point1;
-  // point1.x = 0.29;
-  // point1.y = 0;
-  // point1.z = 0.91;
-
-  // geometry_msgs::Point point2;
-  // point2.x = -0.29;
-  // point2.y = 0;
-  // point2.z = 0.91;
 
   double x = 0.31;
   double y = 0.2;
@@ -503,21 +491,28 @@ cw3::t3()
   point4.y = y;
   point4.z = z;
 
+    // geometry_msgs::Point point1;
+  // point1.x = 0.29;
+  // point1.y = 0;
+  // point1.z = 0.91;
+
+  // geometry_msgs::Point point2;
+  // point2.x = -0.29;
+  // point2.y = 0;
+  // point2.z = 0.91;
+
+  std::vector<geometry_msgs::Point> corners(4);
   corners[0] = point1;
   corners[1] = point2;
   corners[2] = point3;
   corners[3] = point4;
-
-  std::array<int64_t, 2> res;
-  res[0] = 1;
-  res[1] = 1;
 
   geometry_msgs::Pose target_pose;
   geometry_msgs::Point point;
 
   PointCPtr full_scene_cloud (new PointC);
 
-  for (size_t i = 0; i < 4; ++i) {
+  for (size_t i = 0; i < corners.size(); ++i) {
       const auto& point = corners[i];
       target_pose = moveAbovePose(point);
       moveArm(target_pose);
@@ -557,6 +552,108 @@ cw3::t3()
 
   pubFilteredPCMsg(full_scene_pub_cloud,*full_scene_cloud);
 
+  return full_scene_cloud;
+}
+
+void 
+cw3::publishMarker(float x, float y,float z,int id)
+{
+
+  // Set up the marker
+  visualization_msgs::Marker marker;
+  marker.header.frame_id = BASE_FRAME_; // Set the frame ID (change to your frame)
+  marker.header.stamp = ros::Time::now();
+  marker.ns = "basic_shapes";
+  marker.id = id;
+  marker.type = visualization_msgs::Marker::SPHERE; // Set the marker type
+  marker.action = visualization_msgs::Marker::ADD;
+  marker.pose.position.x = x; // Set the position
+  marker.pose.position.y = y;
+  marker.pose.position.z = z;
+  marker.pose.orientation.x = 0.0;
+  marker.pose.orientation.y = 0.0;
+  marker.pose.orientation.z = 0.0;
+  marker.pose.orientation.w = 1.0;
+  marker.scale.x = 0.01; // Set the scale (adjust as needed)
+  marker.scale.y = 0.01;
+  marker.scale.z = 0.01;
+  marker.color.r = 1.0; // Set the color (in RGB)
+  marker.color.g = 0.0;
+  marker.color.b = 0.0;
+  marker.color.a = 1.0;
+  marker.lifetime = ros::Duration(); // Set the lifetime (0 means forever)
+
+  // Publish the marker
+  marker_pub.publish(marker);
+}
+
+std::array<int64_t, 2>
+cw3::t3()
+{
+  addGroundCollision();
+
+  std::vector<PointC> noughts;
+
+  std::array<int64_t, 2> res;
+  res[0] = 1;
+  res[1] = 1;
+
+  PointCPtr full_scene_cloud = scanEnvironment();
+
+  std::vector<pcl::PointIndices> cluster_indices = dbscanClustering(full_scene_cloud);
+
+  std::cout<<"Number of clusters: "<<cluster_indices.size()<<std::endl;
+
+  int id = 0;
+
+  for (const auto& indices : cluster_indices) {
+
+    float sum_x = 0.0, sum_y = 0.0, sum_z = 0.0;
+    
+    for (const auto& idx : indices.indices) {
+            const auto& point = full_scene_cloud->points[idx];
+            sum_x += point.x;
+            sum_y += point.y;
+            sum_z += point.z;
+    }
+
+    size_t num_points = indices.indices.size();
+    float avg_x = sum_x / num_points;
+    float avg_y = sum_y / num_points;
+
+    geometry_msgs::Point centroid;
+    centroid.x = avg_x;
+    centroid.y = avg_y;
+    centroid.z = 0;
+
+    publishMarker(avg_x,avg_y,0,id);
+
+    id++;
+
+    std::cout<<"Cluster Size: "<<num_points<<std::endl;
+    // std::cout<<"Centroid X: "<<avg_x<<std::endl;
+    // std::cout<<"Centroid Y: "<<avg_y<<std::endl;
+
+    float min_dist = 9999;
+    geometry_msgs::Point cloud_point;
+    cloud_point.z = 0;
+    for (const auto& idx : indices.indices) {
+            const auto& point = full_scene_cloud->points[idx];
+            cloud_point.x = point.x;
+            cloud_point.y = point.y;
+            min_dist = std::min(min_dist,euclidDistance(centroid,cloud_point));
+    }
+
+    
+
+    if (min_dist > 0.01){
+      std::cout<<"This is a nought"<<std::endl;
+    }else{
+      std::cout<<"This is a cross"<<std::endl;
+    }
+
+  }
+
   // ROS_INFO("Scene Added");
 
   // arm_group_.setMaxVelocityScalingFactor(0.05);
@@ -583,8 +680,6 @@ cw3::t3()
   // pubFilteredPCMsg(full_scene_pub_cloud, *full_scene_cloud_ptr);
 
   removeCollision(GROUND_COLLISION_);
-
-  arm_group_.setMaxVelocityScalingFactor(0.1);
 
   return res;
 }
@@ -856,9 +951,8 @@ cw3::dbscanClustering(PointCPtr &cloud) {
     // Create DBSCAN clustering object and set parameters
     std::vector<pcl::PointIndices> cluster_indices;
     pcl::EuclideanClusterExtraction<PointT> ec;
-    ec.setClusterTolerance(0.02); // 2cm search radius
-    ec.setMinClusterSize(300);   // Minimum Cluster Size
-    ec.setMaxClusterSize(10000);  // Maximum cluster size
+    ec.setClusterTolerance(0.007); // 2cm search radius
+    ec.setMinClusterSize(100);   // Minimum Cluster Size
     ec.setSearchMethod(tree);
     ec.setInputCloud(cloud);
     ec.extract(cluster_indices);

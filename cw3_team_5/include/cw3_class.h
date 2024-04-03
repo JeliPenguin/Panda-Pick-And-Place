@@ -75,6 +75,8 @@ public:
   ros::Publisher full_scene_pub_cloud;
 
   ros::Publisher octomap_publisher;
+
+  ros::Publisher marker_pub;
   
   /** \brief ROS pose publishers. */
   ros::Publisher g_pub_pose;
@@ -205,6 +207,12 @@ public:
 
   std::vector<pcl::PointIndices> 
   dbscanClustering(PointCPtr &cloud);
+
+  PointCPtr
+  scanEnvironment();
+
+  void 
+  publishMarker(float x, float y,float z,int id);
 
 
   ros::NodeHandle nh_;
