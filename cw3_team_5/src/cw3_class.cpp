@@ -539,6 +539,10 @@ cw3::t3()
 
       applyGroundFilter(g_cloud_ptr,g_cloud_filtered);
 
+      // applyPassthrough(g_cloud_filtered,g_cloud_filtered,"z",0.8);
+
+      pubFilteredPCMsg(g_pub_cloud,*g_cloud_filtered);
+
       pcl_ros::transformPointCloud(BASE_FRAME_, *g_cloud_filtered, *world_cloud, listener_);
 
       if (i==0)
@@ -709,9 +713,9 @@ cw3::applyPassthrough(PointCPtr &in_cloud_ptr,
   // Apply a pass-through filter on the y-axis
   pcl::PassThrough<PointT> pass;
   pass.setInputCloud(in_cloud_ptr); // Set the input point cloud
-  pass.setFilterFieldName(axis); // Set the filtering field to the x-axis
+  pass.setFilterFieldName(axis); // Set the filtering field to the axis
   pass.setFilterLimits(-threshold, threshold); // Set the filtering range
-  pass.filter(*out_cloud_ptr); // Execute the filtering, result stored in cloud_filtered_x
+  pass.filter(*out_cloud_ptr); // Execute the filtering
 }
 
 void
