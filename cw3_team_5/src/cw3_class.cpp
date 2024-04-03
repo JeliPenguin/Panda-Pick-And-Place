@@ -574,9 +574,9 @@ cw3::publishMarker(float x, float y,float z,int id)
   marker.pose.orientation.y = 0.0;
   marker.pose.orientation.z = 0.0;
   marker.pose.orientation.w = 1.0;
-  marker.scale.x = 0.01; // Set the scale (adjust as needed)
-  marker.scale.y = 0.01;
-  marker.scale.z = 0.01;
+  marker.scale.x = 0.1; // Set the scale (adjust as needed)
+  marker.scale.y = 0.1;
+  marker.scale.z = 0.1;
   marker.color.r = 1.0; // Set the color (in RGB)
   marker.color.g = 0.0;
   marker.color.b = 0.0;
