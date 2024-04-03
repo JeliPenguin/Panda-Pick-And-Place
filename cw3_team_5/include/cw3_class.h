@@ -41,6 +41,8 @@ solution is contained within the cw3_team_<your_team_number> package */
 #include <pcl/features/moment_of_inertia_estimation.h>
 #include <pcl/registration/icp.h>
 
+#include <pcl_ros/impl/transforms.hpp>
+
 #include <octomap/octomap.h>
 #include <octomap_msgs/Octomap.h>
 #include <octomap_msgs/conversions.h>
@@ -239,6 +241,7 @@ public:
   
   /** \brief Point Cloud (input) pointer. */
   PointCPtr g_cloud_ptr;
+
   
   /** \brief Point Cloud (filtered) pointer. */
   PointCPtr g_cloud_filtered, g_cloud_filtered2, g_cloud_filtered_color;

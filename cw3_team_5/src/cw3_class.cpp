@@ -468,25 +468,40 @@ cw3::t3()
   addGroundCollision();
 
   std::vector<geometry_msgs::Point> corners(4);
+
+  // geometry_msgs::Point point1;
+  // point1.x = 0.29;
+  // point1.y = 0;
+  // point1.z = 0.91;
+
+  // geometry_msgs::Point point2;
+  // point2.x = -0.29;
+  // point2.y = 0;
+  // point2.z = 0.91;
+
+  double x = 0.31;
+  double y = 0.2;
+  double z = 0.88;
+
   geometry_msgs::Point point1;
-  point1.x = 0.36;
-  point1.y = 0.2;
-  point1.z = 0.8;
+  point1.x = x;
+  point1.y = y;
+  point1.z = z;
 
   geometry_msgs::Point point2;
-  point2.x = 0.36;
-  point2.y = -0.2;
-  point2.z = 0.8;
+  point2.x = x;
+  point2.y = -y;
+  point2.z = z;
 
   geometry_msgs::Point point3;
-  point3.x = -0.36;
-  point3.y = -0.2;
-  point3.z = 0.8;
+  point3.x = -x;
+  point3.y = -y;
+  point3.z = z;
 
-  geometry_msgs::Point point3;
-  point3.x = -0.36;
-  point3.y = 0.2;
-  point3.z = 0.8;
+  geometry_msgs::Point point4;
+  point4.x = -x;
+  point4.y = y;
+  point4.z = z;
 
   corners[0] = point1;
   corners[1] = point2;
@@ -500,24 +515,43 @@ cw3::t3()
   geometry_msgs::Pose target_pose;
   geometry_msgs::Point point;
 
+  PointCPtr full_scene_cloud (new PointC);
+
   for (size_t i = 0; i < 4; ++i) {
       const auto& point = corners[i];
       target_pose = moveAbovePose(point);
       moveArm(target_pose);
-      octomap::OcTree tree(0.05); // Adjust resolution as needed
+      // octomap::OcTree tree(0.01); // Adjust resolution as needed
+      // applyGroundFilter(g_cloud_ptr,g_cloud_filtered);
+
+      // for (const auto& point : *g_cloud_filtered) {
+      //     tree.updateNode(octomap::point3d(point.x, point.y, point.z), true); // Mark the cell as occupied
+      // }
+      // // Publish OctoMap
+      // octomap_msgs::Octomap octomap_msg;
+      // octomap_msgs::fullMapToMsg(tree, octomap_msg);
+
+      // octomap_msg.header.frame_id = g_cloud_filtered->header.frame_id;
+      // octomap_msg.header.stamp = pcl_conversions::fromPCL(g_cloud_filtered->header.stamp);
+      // octomap_publisher.publish(octomap_msg);
+
+      PointCPtr world_cloud (new PointC);
+
       applyGroundFilter(g_cloud_ptr,g_cloud_filtered);
 
-      for (const auto& point : *g_cloud_filtered) {
-          tree.updateNode(octomap::point3d(point.x, point.y, point.z), true); // Mark the cell as occupied
-      }
-      // Publish OctoMap
-      octomap_msgs::Octomap octomap_msg;
-      octomap_msgs::fullMapToMsg(tree, octomap_msg);
+      pcl_ros::transformPointCloud(BASE_FRAME_, *g_cloud_filtered, *world_cloud, listener_);
 
-      octomap_msg.header.frame_id = g_cloud_filtered->header.frame_id;
-      octomap_msg.header.stamp = pcl_conversions::fromPCL(g_cloud_filtered->header.stamp);
-      octomap_publisher.publish(octomap_msg);
+      if (i==0)
+      {
+        *full_scene_cloud = *world_cloud;
+      }else{
+        *full_scene_cloud += *world_cloud;
+      }
+
+      
   }
+
+  pubFilteredPCMsg(full_scene_pub_cloud,*full_scene_cloud);
 
   // ROS_INFO("Scene Added");
 
