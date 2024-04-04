@@ -57,14 +57,15 @@ rosservice call /task 3
 The task will working.
 ## Description
 ### Task 1
-![alt text](https://github.com/JeliPenguin/COMP0129-CW1/blob/main/task1.png?raw=true)
-The goal of task 1 is to use a robotic arm to pick up cubes and drop them into a specified basket. The coordinates are randomly generated during cube generation and are given in the /task 1 service request.
+![alt text](https://github.com/JeliPenguin/COMP0129-CW3/blob/main/task1.png?raw=true)
+The goal of task 1 is to use a robotic arm to pick up nought/cross and place it into a brown basket. The coordinates are randomly generated and are given in the /task 1 service request.
 ### Task 2
-![alt text](https://github.com/JeliPenguin/COMP0129-CW1/blob/main/task2.png?raw=true)
-The goal of Task 2 is to detect the color of multiple baskets using a point cloud using the r200 camera on the robotic arm. The coordinates are randomly generated during basket generation and are given in the /task 2 service request.
+![alt text](https://github.com/JeliPenguin/COMP0129-CW3/blob/main/task2.png?raw=true)
+The goal of Task 2 is to determine which reference shape the mystery shape matches. The coordinates of the shapes are randomly generated during and are given in the /task 2 service request.
 ### Task 3
-![alt text](https://github.com/JeliPenguin/COMP0129-CW1/blob/main/task3?raw=true)
-The goal of task 3 is to combine task 1 and task 2, where cubes and baskets appear randomly in space, detect their coordinates, and place the cube of the corresponding color into the basket of the corresponding color.
+![alt text](https://github.com/JeliPenguin/COMP0129-CW3/blob/main/task3?raw=true)
+The goal of Task 3 is to count the total number of shapes, excluding the black obstacles and determine which shape is more common, and pick up and place the most common shape while avoiding obstacles.
+
 ## Troubleshooting
 
 When running this package, you might encounter instances where the process dies unexpectedly or where the robotic arm stops in the middle of executing a task, especially for task 3. In such cases, it's recommended to gracefully stop the running process using `ctrl+C` and then restart the application by following these steps in the terminal:
