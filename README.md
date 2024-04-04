@@ -36,7 +36,7 @@ Follow these steps to build the project and run the solution:
     Finally, to run the solution, use the `roslaunch` command with your package name and launch file:
 
     ```bash
-    roslaunch cw1_team_x run_solution.launch
+    roslaunch cw3_team_5 run_solution.launch
     ```
 
     This command will start the ROS nodes and bring up any necessary components as defined in your `run_solution.launch` file.
