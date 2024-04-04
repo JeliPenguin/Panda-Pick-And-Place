@@ -155,7 +155,13 @@ public:
   removeCollision(std::string object_name);
 
   void
+  removeObstacles(int obstacle_count);
+
+  void
   addGroundCollision(float ground_height=0.02);
+
+  void
+  addObstacleCollision(geometry_msgs::Point obstacle_centroid,std::string obj_name);
 
   void 
   applyGroundFilter(PointCPtr &input_cloud, PointCPtr &output_cloud);

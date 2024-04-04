@@ -501,7 +501,7 @@ cw3::determineShape()
 
   float num_points = g_cloud_filtered->size();
 
-  if (num_points > 0)
+  if (num_points > 10)
   {
     return "cross";
   }
@@ -569,6 +569,11 @@ cw3::scanEnvironment()
   double y = 0.2;
   double z = 0.88;
 
+  geometry_msgs::Point initPoint;
+  initPoint.x = x;
+  initPoint.y = 0;
+  initPoint.z = z;
+
   geometry_msgs::Point point1;
   point1.x = x;
   point1.y = y;
@@ -580,12 +585,12 @@ cw3::scanEnvironment()
   point2.z = z;
 
   geometry_msgs::Point point3;
-  point3.x = -x;
+  point3.x = -x-0.02;
   point3.y = -y;
   point3.z = z;
 
   geometry_msgs::Point point4;
-  point4.x = -x;
+  point4.x = -x-0.02;
   point4.y = y;
   point4.z = z;
 
@@ -605,7 +610,10 @@ cw3::scanEnvironment()
   corners[2] = point3;
   corners[3] = point4;
 
-  geometry_msgs::Pose target_pose;
+  // Move arm to initial position
+  geometry_msgs::Pose target_pose = moveAbovePose(initPoint);
+  moveArm(target_pose);
+
   geometry_msgs::Point point;
 
   PointCPtr full_scene_cloud (new PointC);
@@ -668,9 +676,9 @@ cw3::colorDetermination(float r, float g, float b) {
 
     int colorThreshold = 50; 
 
-    int upper = 150;
+    int upper = 160;
     int lower = 26;
-    // Check if the point matches any known basket colors
+
     if (std::fabs(r - upper) < colorThreshold && std::fabs(g - lower) < colorThreshold && std::fabs(b - lower) < colorThreshold) {
         return "red";
     }
@@ -692,7 +700,7 @@ cw3::publishMarker(float x, float y,float z,int id)
 
   // Set up the marker
   visualization_msgs::Marker marker;
-  marker.header.frame_id = BASE_FRAME_; // Set the frame ID (change to your frame)
+  marker.header.frame_id = BASE_FRAME_;
   marker.header.stamp = ros::Time::now();
   marker.ns = "basic_shapes";
   marker.id = id;
@@ -705,14 +713,14 @@ cw3::publishMarker(float x, float y,float z,int id)
   marker.pose.orientation.y = 0.0;
   marker.pose.orientation.z = 0.0;
   marker.pose.orientation.w = 1.0;
-  marker.scale.x = 0.1; // Set the scale (adjust as needed)
-  marker.scale.y = 0.1;
-  marker.scale.z = 0.1;
+  marker.scale.x = 0.05; // Set the scale
+  marker.scale.y = 0.05;
+  marker.scale.z = 0.05;
   marker.color.r = 1.0; // Set the color (in RGB)
   marker.color.g = 0.0;
   marker.color.b = 0.0;
   marker.color.a = 1.0;
-  marker.lifetime = ros::Duration(); // Set the lifetime (0 means forever)
+  marker.lifetime = ros::Duration(); // Set the lifetime
 
   // Publish the marker
   marker_pub.publish(marker);
@@ -723,11 +731,15 @@ cw3::t3()
 {
   addGroundCollision();
 
-  std::vector<PointC> noughts;
+  std::vector<geometry_msgs::Point> noughts;
+  std::vector<geometry_msgs::Point> crosses;
+
+  int obstacle_count = 0;
+
+  geometry_msgs::Point basket_point;
+  basket_point.z = 0;
 
   std::array<int64_t, 2> res;
-  res[0] = 1;
-  res[1] = 1;
 
   PointCPtr full_scene_cloud = scanEnvironment();
 
@@ -767,70 +779,91 @@ cw3::t3()
     centroid.z = 0;
 
     publishMarker(avg_x,avg_y,0,id);
-
     id++;
+
     std::cout<<"==================================="<<std::endl;
     std::cout<<"Cluster Size: "<<num_points<<std::endl;
     // std::cout<<"Centroid X: "<<avg_x<<std::endl;
     // std::cout<<"Centroid Y: "<<avg_y<<std::endl;
-    // std::cout<<"Average R: "<<avg_r<<std::endl;
-    // std::cout<<"Average G: "<<avg_g<<std::endl;
-    // std::cout<<"Average B: "<<avg_b<<std::endl;
+    std::cout<<"Average R: "<<avg_r<<std::endl;
+    std::cout<<"Average G: "<<avg_g<<std::endl;
+    std::cout<<"Average B: "<<avg_b<<std::endl;
 
-    std::string cluster_color = colorDetermination(avg_r,avg_g,avg_b);
+    bool cluster_not_black = (avg_r + avg_g + avg_b) > 90;
 
-    std::cout<<"Color: "<<cluster_color<<std::endl;
+    // std::cout<<"Color: "<<cluster_color<<std::endl;
 
-    float min_dist = 9999;
-    float max_dist = 0;
-    float distance;
-    geometry_msgs::Point cloud_point;
-    cloud_point.z = 0;
-    for (const auto& idx : indices.indices) {
-            const auto& point = full_scene_cloud->points[idx];
-            cloud_point.x = point.x;
-            cloud_point.y = point.y;
-            distance = euclidDistance(centroid,cloud_point);
-            min_dist = std::min(min_dist,distance);
-            max_dist = std::max(max_dist,distance);
-    }
+    if (cluster_not_black)
+    {
+      float min_dist = 9999;
+      float max_dist = 0;
+      float distance;
+      geometry_msgs::Point cloud_point;
+      cloud_point.z = 0;
+      for (const auto& idx : indices.indices) {
+              const auto& point = full_scene_cloud->points[idx];
+              cloud_point.x = point.x;
+              cloud_point.y = point.y;
+              distance = euclidDistance(centroid,cloud_point);
+              min_dist = std::min(min_dist,distance);
+              max_dist = std::max(max_dist,distance);
+      }
 
-    std::cout<<"Max Distance: "<<max_dist<<std::endl;
+      std::cout<<"Min Distance: "<<min_dist<<std::endl;
+      std::cout<<"Max Distance: "<<max_dist<<std::endl;
 
-    if (min_dist > 0.01){
-      std::cout<<"This is a nought"<<std::endl;
+      if (max_dist > 0.2)
+      {
+        std::cout<<"This is a basket"<<std::endl;
+        basket_point.x = avg_x;
+        basket_point.y = avg_y;
+      }
+      else if (min_dist > 0.01){
+        std::cout<<"This is a nought"<<std::endl;
+        noughts.push_back(centroid);
+      }else{
+        std::cout<<"This is a cross"<<std::endl;
+        crosses.push_back(centroid);
+      }
     }else{
-      std::cout<<"This is a cross"<<std::endl;
-    }
+      // add obstacle collision
+      geometry_msgs::Point obstacle_point = centroid;
+      addObstacleCollision(obstacle_point,std::to_string(obstacle_count));
 
+      obstacle_count++;
+    }
   }
 
-  // ROS_INFO("Scene Added");
+  std::cout<<"There are "<<noughts.size()<<" noughts"<<std::endl;
+  std::cout<<"There are "<<crosses.size()<<" crosses"<<std::endl;
 
-  // arm_group_.setMaxVelocityScalingFactor(0.05);
-  
-  // applyGroundFilter(g_cloud_ptr,g_cloud_filtered);
+  std::cout<<"Noughts:"<<std::endl;
+  for (const auto& nought : noughts) {
+    std::cout<<"X: "<<nought.x<<" Y: "<<nought.y<<" Z: "<<nought.z<<std::endl;
+  }
 
-  // applyBlackFilter(g_cloud_filtered,g_cloud_filtered);
-
-  // pubFilteredPCMsg(g_pub_cloud, *g_cloud_filtered);
-
-  // applyVX(g_cloud_ptr, g_cloud_filtered);
-
-  // pcl::IterativeClosestPoint<PointT, PointT> icp;
-  // icp.setInputSource(full_scene_cloud_ptr); //This cloud will be transformed to match
-  // icp.setInputTarget(g_cloud_filtered); //this cloud. The result is stored in the cloud provided as input below.
+  std::cout<<"Crosses:"<<std::endl;
+  for (const auto& cross : crosses) {
+    std::cout<<"X: "<<cross.x<<" Y: "<<cross.y<<" Z: "<<cross.z<<std::endl;
+  }
 
 
-  // icp.align(*full_scene_cloud_ptr); //Overwrite the source cloud with the transformed cloud.
+  if (noughts.size() > crosses.size())
+  {
+    t1(noughts[0], basket_point, "noughts");
+  }else{
+    t1(crosses[0], basket_point, "crosses");
+  } 
 
-  // *full_scene_cloud_ptr += *g_cloud_filtered; //Merge the two now aligned and matched clouds.
+  int64_t total_num_shapes = static_cast<int>(noughts.size() + crosses.size());
+  int64_t num_most_common = static_cast<int>(std::max(noughts.size(), crosses.size()));
 
-  // ROS_INFO("Scene Added");
-
-  // pubFilteredPCMsg(full_scene_pub_cloud, *full_scene_cloud_ptr);
+  res[0] = total_num_shapes;
+  res[1] = num_most_common;
 
   removeCollision(GROUND_COLLISION_);
+
+  removeObstacles(obstacle_count);
 
   return res;
 }
@@ -892,6 +925,15 @@ cw3::removeCollision(std::string object_name)
   planning_scene_interface_.applyCollisionObjects(object_vector);
 }
 
+void
+cw3::removeObstacles(int obstacle_count)
+{
+  for (int i=0;i<obstacle_count;i++)
+  {
+    removeCollision(std::to_string(i));
+  }
+}
+
 
 void
 cw3::addGroundCollision(float ground_height)
@@ -913,6 +955,23 @@ cw3::addGroundCollision(float ground_height)
   ground_orientation.z = 0;
 
   addCollision(GROUND_COLLISION_,ground_position,ground_dimension,ground_orientation);
+}
+
+void
+cw3::addObstacleCollision(geometry_msgs::Point obstacle_centroid,std::string obj_name)
+{
+  geometry_msgs::Quaternion orientation;
+  orientation.w = 1;
+  orientation.x = 0;
+  orientation.y = 0;
+  orientation.z = 0;
+
+  geometry_msgs::Vector3 dimension;
+  dimension.x = 0.1;
+  dimension.y = 0.1;
+  dimension.z = 0.5;
+
+  addCollision(obj_name,obstacle_centroid,dimension,orientation);
 }
 
 void 
