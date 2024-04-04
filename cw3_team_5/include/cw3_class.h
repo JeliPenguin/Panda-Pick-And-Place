@@ -28,6 +28,7 @@ solution is contained within the cw3_team_<your_team_number> package */
 #include <pcl/filters/crop_box.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/features/normal_3d.h>
+#include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/ModelCoefficients.h>
 #include <pcl/sample_consensus/method_types.h>
 #include <pcl/sample_consensus/model_types.h>
@@ -109,6 +110,9 @@ public:
   bool 
   moveGripper(float width);
   
+  float 
+  computeOptimalAngle(const PointCPtr& input_cloud, double length, float radius, std::string type);
+
   void
   cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg);
 
