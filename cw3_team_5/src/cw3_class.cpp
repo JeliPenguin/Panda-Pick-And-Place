@@ -109,59 +109,47 @@ cw3::t3_callback(cw3_world_spawner::Task3Service::Request &request,
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void
+/**
+ * @brief Callback function for handling PointCloud2 messages.
+ * 
+ * This function is called whenever a PointCloud2 message is received.
+ * It performs the necessary conversions and processing on the received message.
+ * 
+ * @param msg Pointer to the received PointCloud2 message.
+ */
+void 
 cw3::cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg) {
   // ROS_INFO("PointCloud2 message received");
-  // convert from ros' sensor_msg/PointCloud2 to pcl/PointCloud2
+
+  // Convert from ROS sensor_msgs/PointCloud2 to PCL PCLPointCloud2
   pcl::PCLPointCloud2 pcl_cloud;
   pcl_conversions::toPCL(*msg, pcl_cloud);
 
-  // convert pcl/PointCloud2 to PointCloud vector of PointXYZRGB
-  // rgb_cloud_.reset(new pcl::PointCloud<pcl::PointXYZRGB>); 
-  // pcl::fromPCLPointCloud2(pcl_cloud, *rgb_cloud_);
-
-  // g_cloud_ptr.reset(new PointC);
-  pcl::fromPCLPointCloud2 (pcl_cloud, *g_cloud_ptr);
-
-  // pcl::PointCloud<pcl::PointXYZRGBA>::Ptr temp_cloud_rgba(new pcl::PointCloud<pcl::PointXYZRGBA>);
-  // pcl::copyPointCloud(*cloud_filtered, *temp_cloud_rgba); // Convert from XYZRGB to XYZRGBA
-  // pubFilteredPCMsg(g_pub_cloud, *temp_cloud_rgba);
-
+  // Reset the pointer to the PointCloud<pcl::PointXYZRGBA> to store the converted point cloud
+  pcl::fromPCLPointCloud2(pcl_cloud, *g_cloud_ptr);
 }
 
-void
-cw3::pubFilteredPCMsg (ros::Publisher &pc_pub,
-                               PointC &pc)
-{
-  // Publish the data
+////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * @brief Publishes a filtered PointCloud message.
+ * 
+ * This function converts the input PointCloud data to a ROS PointCloud2 message
+ * and publishes it using the provided ROS publisher.
+ * 
+ * @param pc_pub Reference to the ROS publisher for the PointCloud message.
+ * @param pc Reference to the filtered PointCloud data to be published.
+ */
+void 
+cw3::pubFilteredPCMsg(ros::Publisher &pc_pub, PointC &pc) {
+  // Convert PointCloud data to ROS PointCloud2 message
   sensor_msgs::PointCloud2 g_cloud_msg;
   pcl::toROSMsg(pc, g_cloud_msg);
-  pc_pub.publish (g_cloud_msg);
-  
+
+  // Publish the PointCloud2 message
+  pc_pub.publish(g_cloud_msg);
+
   return;
-}
-
-
-geometry_msgs::PointStamped
-cw3::frameTransform(geometry_msgs::Point from_p, std::string from_frame, std::string to_frame){
-  // Temporary storage for transformation.
-  geometry_msgs::PointStamped from_p_stamped;
-  geometry_msgs::PointStamped to_p;
-
-  // Prepare for coordinate frame transformation.
-  from_p_stamped.header.frame_id = from_frame;
-  from_p_stamped.point.x = from_p.x;
-  from_p_stamped.point.y = from_p.y;
-  from_p_stamped.point.z = from_p.z;
-
-  try {
-      // Transform centroid to "panda_link0" frame.
-      listener_.transformPoint(to_frame, from_p_stamped, to_p);
-  } catch (tf::TransformException& ex) {
-      ROS_ERROR("Received a transformation exception: %s", ex.what());
-  }
-
-  return to_p;
 }
 
 
@@ -169,19 +157,29 @@ cw3::frameTransform(geometry_msgs::Point from_p, std::string from_frame, std::st
 // Task 1
 ///////////////////////////////////////////////////////////////////////////////
 
-geometry_msgs::Pose
-cw3::moveAbove(geometry_msgs::Point point, float angle){
-  /* This function produces a "gripper facing down" pose given a xyz point */
-
+/**
+ * @brief Generates a geometry_msgs::Pose for placing the gripper above a specified point.
+ * 
+ * This function calculates a gripper pose with the gripper facing downwards, positioned above the specified point.
+ * 
+ * @param point The XYZ coordinates of the point below which the gripper should be positioned.
+ * @param angle The angle offset from the default orientation of the gripper.
+ * @return A geometry_msgs::Pose representing the gripper pose.
+ */
+geometry_msgs::Pose 
+cw3::moveAbove(geometry_msgs::Point point, float angle) {
+  // This function produces a "gripper facing down" pose given an xyz point
+  
   // Position gripper above point
   tf2::Quaternion q_x180deg(1, 0, 0, 0);
-  // Gripper Orientation
+  
+  // Calculate gripper orientation
   tf2::Quaternion q_object;
-  q_object.setRPY(0, 0, angle_offset_+angle);
+  q_object.setRPY(0, 0, angle_offset_ + angle);
   tf2::Quaternion q_result = q_x180deg * q_object;
   geometry_msgs::Quaternion orientation = tf2::toMsg(q_result);
 
-  // set the desired Pose
+  // Set the desired Pose
   geometry_msgs::Pose pose;
   pose.position = point;
   pose.orientation = orientation;
@@ -189,38 +187,55 @@ cw3::moveAbove(geometry_msgs::Point point, float angle){
   return pose;
 }
 
+
 ///////////////////////////////////////////////////////////////////////////////
 
+/**
+ * @brief Moves the robotic arm to a specified target pose.
+ * 
+ * This function sets up the target pose for the arm, plans a movement path, and executes the planned path.
+ * 
+ * @param target_pose The target pose to which the arm should move.
+ * @return True if the arm successfully moves to the target pose, false otherwise.
+ */
 bool 
-cw3::moveArm(geometry_msgs::Pose target_pose)
-{
-  // setup the target pose
+cw3::moveArm(geometry_msgs::Pose target_pose) {
+  // Setup the target pose
   ROS_INFO("Setting pose target");
   arm_group_.setPoseTarget(target_pose);
 
-  // create a movement plan for the arm
+  // Create a movement plan for the arm
   ROS_INFO("Attempting to plan the path");
   moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-  bool success = (arm_group_.plan(my_plan) ==
-    moveit::planning_interface::MoveItErrorCode::SUCCESS);
+  bool success = (arm_group_.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
 
-  // google 'c++ conditional operator' to understand this line
+  // Output plan visualization status
   ROS_INFO("Visualising plan %s", success ? "" : "FAILED");
 
-  if (success)
-  {
+  // Update current end-effector position if planning successful
+  if (success) {
     crt_ee_position = target_pose.position;
   }
-  // execute the planned path
+
+  // Execute the planned path
   arm_group_.move();
 
   return success;
 }
 
+
 ///////////////////////////////////////////////////////////////////////////////
 
-geometry_msgs::Pose
-cw3::moveAbovePose(geometry_msgs::Point point){
+/**
+ * @brief Generates a geometry_msgs::Pose for positioning the gripper above a specified point.
+ * 
+ * This function calculates a gripper pose with the gripper facing downwards and positioned above the specified point.
+ * 
+ * @param point The XYZ coordinates of the point below which the gripper should be positioned.
+ * @return A geometry_msgs::Pose representing the gripper pose.
+ */
+geometry_msgs::Pose 
+cw3::moveAbovePose(geometry_msgs::Point point) {
   // Create a quaternion representing a 180-degree rotation along the X-axis for "gripper facing down" orientation.
   tf2::Quaternion q_x180deg(1, 0, 0, 0); // Gripper Position
 
@@ -238,83 +253,104 @@ cw3::moveAbovePose(geometry_msgs::Point point){
   return pose;
 }
 
+
 ///////////////////////////////////////////////////////////////////////////////
 
+/**
+ * @brief Moves the gripper to a specified width.
+ * 
+ * This function adjusts the width of the gripper to the specified value by moving its joints.
+ * 
+ * @param width The desired width of the gripper.
+ * @return True if the gripper successfully moves to the specified width, false otherwise.
+ */
 bool 
-cw3::moveGripper(float width)
-{
-  // safety checks in case width exceeds safe values
+cw3::moveGripper(float width) {
+  // Safety checks in case width exceeds safe values
   if (width > gripper_open_) 
     width = gripper_open_;
   if (width < gripper_closed_) 
     width = gripper_closed_;
 
-  // calculate the joint targets as half each of the requested distance
+  // Calculate the joint targets as half each of the requested distance
   double eachJoint = width / 2.0;
 
-  // create a vector to hold the joint target for each joint
+  // Create a vector to hold the joint target for each joint
   std::vector<double> gripperJointTargets(2);
   gripperJointTargets[0] = eachJoint;
   gripperJointTargets[1] = eachJoint;
 
-  // apply the joint target
+  // Apply the joint target
   hand_group_.setJointValueTarget(gripperJointTargets);
 
-  // move the robot hand
+  // Move the robot hand
   ROS_INFO("Attempting to plan the path");
   moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-  bool success = (hand_group_.plan(my_plan) ==
-    moveit::planning_interface::MoveItErrorCode::SUCCESS);
+  bool success = (hand_group_.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
 
+  // Output plan visualization status
   ROS_INFO("Visualising plan %s", success ? "" : "FAILED");
 
-  // move the gripper joints
+  // Move the gripper joints
   hand_group_.move();
 
   return success;
 }
 
+
 ///////////////////////////////////////////////////////////////////////////////
 
-bool
-cw3::pick(geometry_msgs::Point object, 
-          geometry_msgs::Point Goal,
-          float angle)
-{
-
+/**
+ * @brief Picks up an object from a specified position and places it at a goal position.
+ * 
+ * This function performs a pick-and-place operation for an object. It calculates the grasp pose above the object,
+ * adjusts the pose for picking up and releasing the object, executes the pick-and-place operation, and opens the gripper.
+ * 
+ * @param object The position of the object to be picked up.
+ * @param Goal The goal position where the object should be placed.
+ * @param angle The angle offset for adjusting the gripper orientation during picking.
+ * @return True if the pick-and-place operation is successful, false otherwise.
+ */
+bool 
+cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
+  // Calculate the grasp pose above the object with the specified angle
   geometry_msgs::Pose grasp_pose = moveAbove(object, angle);
-  grasp_pose.position.z += 0.14; 
+  grasp_pose.position.z += 0.14; // Adjust the height for grasping
+  
+  // Create offset pose for picking up the object
   geometry_msgs::Pose offset_pose = grasp_pose;
   offset_pose.position.z += 0.125;
+  
+  // Calculate the release pose above the goal position
   geometry_msgs::Pose release_pose = moveAbovePose(Goal);
-  release_pose.position.z += 0.5; 
+  release_pose.position.z += 0.5; // Adjust the height for releasing
 
-
-  // Close
+  // Close gripper to pick up the object
   moveArm(offset_pose);
   moveGripper(gripper_open_);
   moveArm(grasp_pose);
   moveGripper(gripper_closed_);
-  
 
-  // Takeaway
-  offset_pose.position.z += 0.125;
+  // Move the arm to take away the object
+  offset_pose.position.z += 0.2;
   moveArm(offset_pose);
   
-  // Place
+  // Move the arm to place the object at the goal position
   moveArm(release_pose);
   release_pose.position.z -= 0.2;
   moveArm(release_pose);
 
-  // Open gripper
+  // Open gripper to release the object
   moveGripper(gripper_open_);
   
   return true;
 }
 
+
 ///////////////////////////////////////////////////////////////////////////////
 
-float cw3::computeOptimalAngle(const PointCPtr& input_cloud, double length, float radius, std::string type) {
+float 
+cw3::computeOptimalAngle(const PointCPtr& input_cloud, double length, float radius, std::string type) {
     pcl::KdTreeFLANN<PointT> kdtree;
     kdtree.setInputCloud(input_cloud);
 
@@ -489,104 +525,151 @@ cw3::t1(geometry_msgs::Point object,
 
 /////////////////////////////////////////////////////////////////////////
 
-std::string
-cw3::determineShape()
-{
+/**
+ * @brief Determines the shape detected in the point cloud.
+ * 
+ * This function applies various filters to the point cloud to isolate the shape of interest.
+ * It then analyzes the filtered point cloud to determine the detected shape.
+ * 
+ * @return A string indicating the determined shape ("cross" or "nought").
+ */
+std::string 
+cw3::determineShape() {
   std::string shape = "nought";
 
+  // Apply voxel grid filter
   applyVX(g_cloud_ptr, g_cloud_filtered);
 
-  applyGroundFilter(g_cloud_filtered,g_cloud_filtered);
+  // Apply ground filter
+  applyGroundFilter(g_cloud_filtered, g_cloud_filtered);
 
-  applyPassthrough(g_cloud_filtered,g_cloud_filtered,"x");
+  // Apply passthrough filters along X and Y axes
+  applyPassthrough(g_cloud_filtered, g_cloud_filtered, "x");
+  applyPassthrough(g_cloud_filtered, g_cloud_filtered, "y");
 
-  applyPassthrough(g_cloud_filtered,g_cloud_filtered,"y");
-
+  // Publish the filtered point cloud
   pubFilteredPCMsg(g_pub_cloud, *g_cloud_filtered);
 
+  // Get the number of points in the filtered cloud
   float num_points = g_cloud_filtered->size();
 
-  if (num_points > 10)
-  {
+  // Determine shape based on the number of points
+  if (num_points > 10) {
     return "cross";
   }
+
   return "nought";
 }
 
+
 ///////////////////////////////////////////////////////////////////////////////
 
-float
-cw3::euclidDistance(geometry_msgs::Point p1,geometry_msgs::Point p2)
-{
+/**
+ * @brief Calculates the Euclidean distance between two 3D points.
+ * 
+ * This function computes the Euclidean distance between two points represented by their x, y, and z coordinates.
+ * 
+ * @param p1 The first point.
+ * @param p2 The second point.
+ * @return The Euclidean distance between the two points.
+ */
+float 
+cw3::euclidDistance(geometry_msgs::Point p1, geometry_msgs::Point p2) {
+  // Calculate differences in coordinates
   double dx = p2.x - p1.x;
   double dy = p2.y - p1.y;
   double dz = p2.z - p1.z;
-  return std::sqrt(dx*dx + dy*dy + dz*dz);
+
+  // Compute Euclidean distance
+  return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
+/**
+ * @brief Determines the type of the mystery object relative to reference object points.
+ * 
+ * This function compares the distance between the end-effector position and the mystery object point
+ * with the distance between the end-effector position and the first reference object point.
+ * Based on the comparison, it selects two points for further processing.
+ * It then moves the robot arm to positions above these points, determines the shapes of the objects,
+ * and removes ground collision constraints before returning the result.
+ * 
+ * @param ref_object_points Vector containing reference object points.
+ * @param mystery_object_point The mystery object point to be compared with the reference points.
+ * @return 1 if the mystery object is of the same type as the reference object, 2 otherwise.
+ */
 int64_t
-cw3::t2(std::vector<geometry_msgs::PointStamped>& ref_object_points, geometry_msgs::PointStamped mystery_object_point)
-{
+cw3::t2(std::vector<geometry_msgs::PointStamped>& ref_object_points, geometry_msgs::PointStamped mystery_object_point) {
+  // Add ground collision constraint
   addGroundCollision();
 
+  // Initialize vector to hold two points
   std::vector<geometry_msgs::Point> togo(2);
 
-  if (crt_ee_position.x != -9999)
-  {
-    if (euclidDistance(crt_ee_position,mystery_object_point.point)<euclidDistance(crt_ee_position,ref_object_points[0].point))
-    {
+  // Determine which point to select based on end-effector position
+  if (crt_ee_position.x != -9999) {
+    if (euclidDistance(crt_ee_position, mystery_object_point.point) < euclidDistance(crt_ee_position, ref_object_points[0].point)) {
        togo[0] = mystery_object_point.point;
        togo[1] = ref_object_points[0].point;
-    }else{
+    } else {
       togo[0] = ref_object_points[0].point;
       togo[1] = mystery_object_point.point;
     }
-  }else{
+  } else {
     togo[0] = mystery_object_point.point;
     togo[1] = ref_object_points[0].point;
   }
 
+  // Initialize target pose and object types array
   geometry_msgs::Pose target_pose;
   std::array<std::string, 2> object_types;
 
+  // Move the robot arm to positions above the selected points and determine object shapes
   for (size_t i = 0; i < 2; ++i) {
       const auto& point = togo[i];
       target_pose = moveAbovePose(point);
-      target_pose.position.z = 0.7; 
-      target_pose.position.x += camera_offset_; 
+      target_pose.position.z = 0.7; // Adjust height
+      target_pose.position.x += camera_offset_; // Apply camera offset
       moveArm(target_pose);
       object_types[i] = determineShape();
   }
 
+  // Remove ground collision constraint
   removeCollision(GROUND_COLLISION_);
 
-  if (object_types[0] == object_types[1]){
+  // Compare the object types and return the result
+  if (object_types[0] == object_types[1]) {
     return 1;
   }
   return 2;
 }
 
-PointCPtr
-cw3::scanEnvironment()
-{
-
+/**
+ * @brief Scans the environment by capturing point clouds from different perspectives.
+ * 
+ * This function captures point clouds from multiple perspectives by moving the robot arm to different positions.
+ * It constructs a point cloud representing the entire scene by merging the point clouds obtained from each perspective.
+ * 
+ * @return A shared pointer to a PointCloud containing the merged point cloud of the entire scene.
+ */
+PointCPtr 
+cw3::scanEnvironment() {
+  // Define initial position
   double x = 0.31;
   double y = 0.2;
   double z = 0.88;
-
   geometry_msgs::Point initPoint;
 
-  if (crt_ee_position.x != -9999)
-  {
+  // Set initial point based on current end-effector position or default values
+  if (crt_ee_position.x != -9999) {
     initPoint = crt_ee_position;
-    initPoint.z = z;
-  }
-  else{
+    initPoint.z = 0.6;
+  } else {
     initPoint.x = x;
     initPoint.y = 0;
     initPoint.z = z;
   }
   
+  // Define corner points of the scanning area
   geometry_msgs::Point point1;
   point1.x = x;
   point1.y = y;
@@ -598,25 +681,16 @@ cw3::scanEnvironment()
   point2.z = z;
 
   geometry_msgs::Point point3;
-  point3.x = -x-0.02;
+  point3.x = -x - 0.02;
   point3.y = -y;
   point3.z = z;
 
   geometry_msgs::Point point4;
-  point4.x = -x-0.02;
+  point4.x = -x - 0.02;
   point4.y = y;
   point4.z = z;
 
-    // geometry_msgs::Point point1;
-  // point1.x = 0.29;
-  // point1.y = 0;
-  // point1.z = 0.91;
-
-  // geometry_msgs::Point point2;
-  // point2.x = -0.29;
-  // point2.y = 0;
-  // point2.z = 0.91;
-
+  // Store corner points in a vector
   std::vector<geometry_msgs::Point> corners(4);
   corners[0] = point1;
   corners[1] = point2;
@@ -627,52 +701,35 @@ cw3::scanEnvironment()
   geometry_msgs::Pose target_pose = moveAbovePose(initPoint);
   moveArm(target_pose);
 
-  geometry_msgs::Point point;
-
   PointCPtr full_scene_cloud (new PointC);
 
+  // Iterate through each corner point
   for (size_t i = 0; i < corners.size(); ++i) {
-      const auto& point = corners[i];
-      target_pose = moveAbovePose(point);
-      moveArm(target_pose);
-      // octomap::OcTree tree(0.01); // Adjust resolution as needed
-      // applyGroundFilter(g_cloud_ptr,g_cloud_filtered);
+    const auto& point = corners[i];
+    target_pose = moveAbovePose(point);
+    moveArm(target_pose);
 
-      // for (const auto& point : *g_cloud_filtered) {
-      //     tree.updateNode(octomap::point3d(point.x, point.y, point.z), true); // Mark the cell as occupied
-      // }
-      // // Publish OctoMap
-      // octomap_msgs::Octomap octomap_msg;
-      // octomap_msgs::fullMapToMsg(tree, octomap_msg);
+    PointCPtr world_cloud (new PointC);
 
-      // octomap_msg.header.frame_id = g_cloud_filtered->header.frame_id;
-      // octomap_msg.header.stamp = pcl_conversions::fromPCL(g_cloud_filtered->header.stamp);
-      // octomap_publisher.publish(octomap_msg);
+    // Apply ground filter and transform point cloud to world frame
+    applyGroundFilter(g_cloud_ptr, g_cloud_filtered);
+    pubFilteredPCMsg(g_pub_cloud, *g_cloud_filtered);
+    pcl_ros::transformPointCloud(BASE_FRAME_, *g_cloud_filtered, *world_cloud, listener_);
 
-      PointCPtr world_cloud (new PointC);
-
-      applyGroundFilter(g_cloud_ptr,g_cloud_filtered);
-
-      // applyPassthrough(g_cloud_filtered,g_cloud_filtered,"z",0.8);
-
-      pubFilteredPCMsg(g_pub_cloud,*g_cloud_filtered);
-
-      pcl_ros::transformPointCloud(BASE_FRAME_, *g_cloud_filtered, *world_cloud, listener_);
-
-      if (i==0)
-      {
-        *full_scene_cloud = *world_cloud;
-      }else{
-        *full_scene_cloud += *world_cloud;
-      }
-
-      
+    // Merge point clouds
+    if (i == 0) {
+      *full_scene_cloud = *world_cloud;
+    } else {
+      *full_scene_cloud += *world_cloud;
+    }
   }
 
-  pubFilteredPCMsg(full_scene_pub_cloud,*full_scene_cloud);
+  // Publish the merged point cloud of the entire scene
+  pubFilteredPCMsg(full_scene_pub_cloud, *full_scene_cloud);
 
   return full_scene_cloud;
 }
+
 
 
 /**
@@ -707,37 +764,46 @@ cw3::colorDetermination(float r, float g, float b) {
 
 }
 
+/**
+ * @brief Publishes a marker at a specified position.
+ * 
+ * This function publishes a marker in RViz at the specified position with the given ID.
+ * 
+ * @param x The x-coordinate of the marker position.
+ * @param y The y-coordinate of the marker position.
+ * @param z The z-coordinate of the marker position.
+ * @param id The ID of the marker.
+ */
 void 
-cw3::publishMarker(float x, float y,float z,int id)
-{
-
+cw3::publishMarker(float x, float y, float z, int id) {
   // Set up the marker
   visualization_msgs::Marker marker;
   marker.header.frame_id = BASE_FRAME_;
   marker.header.stamp = ros::Time::now();
   marker.ns = "basic_shapes";
   marker.id = id;
-  marker.type = visualization_msgs::Marker::SPHERE; // Set the marker type
+  marker.type = visualization_msgs::Marker::SPHERE;
   marker.action = visualization_msgs::Marker::ADD;
-  marker.pose.position.x = x; // Set the position
+  marker.pose.position.x = x;
   marker.pose.position.y = y;
   marker.pose.position.z = z;
   marker.pose.orientation.x = 0.0;
   marker.pose.orientation.y = 0.0;
   marker.pose.orientation.z = 0.0;
   marker.pose.orientation.w = 1.0;
-  marker.scale.x = 0.05; // Set the scale
+  marker.scale.x = 0.05;
   marker.scale.y = 0.05;
   marker.scale.z = 0.05;
-  marker.color.r = 1.0; // Set the color (in RGB)
+  marker.color.r = 1.0;
   marker.color.g = 0.0;
   marker.color.b = 0.0;
   marker.color.a = 1.0;
-  marker.lifetime = ros::Duration(); // Set the lifetime
+  marker.lifetime = ros::Duration();
 
   // Publish the marker
   marker_pub.publish(marker);
 }
+
 
 std::array<int64_t, 2>
 cw3::t3()
@@ -939,22 +1005,27 @@ cw3::t3()
 }
 
 
-void
-cw3::addCollision(std::string object_name,
-  geometry_msgs::Point centre, geometry_msgs::Vector3 dimensions,
-  geometry_msgs::Quaternion orientation)
-{
-  /* add a collision object in RViz and the MoveIt planning scene */
-
-  // create a collision object message, and a vector of these messages
+/**
+ * @brief Adds a collision object to the MoveIt planning scene and RViz.
+ * 
+ * This function creates a collision object message and adds it to the MoveIt planning scene and RViz for collision detection.
+ * 
+ * @param object_name The name of the collision object.
+ * @param centre The centre point of the collision object.
+ * @param dimensions The dimensions of the collision object.
+ * @param orientation The orientation of the collision object.
+ */
+void 
+cw3::addCollision(std::string object_name, geometry_msgs::Point centre, geometry_msgs::Vector3 dimensions, geometry_msgs::Quaternion orientation) {
+  // Create a collision object message and a vector of these messages
   moveit_msgs::CollisionObject collision_object;
   std::vector<moveit_msgs::CollisionObject> object_vector;
-  
-  // input header information
+
+  // Set header information
   collision_object.id = object_name;
   collision_object.header.frame_id = BASE_FRAME_;
 
-  // define the primitive and its dimensions
+  // Define the primitive type and its dimensions
   collision_object.primitives.resize(1);
   collision_object.primitives[0].type = collision_object.primitives[0].BOX;
   collision_object.primitives[0].dimensions.resize(3);
@@ -962,70 +1033,97 @@ cw3::addCollision(std::string object_name,
   collision_object.primitives[0].dimensions[1] = dimensions.y;
   collision_object.primitives[0].dimensions[2] = dimensions.z;
 
-  // define the pose of the collision object
+  // Define the pose of the collision object
   collision_object.primitive_poses.resize(1);
   collision_object.primitive_poses[0].position.x = centre.x;
   collision_object.primitive_poses[0].position.y = centre.y;
   collision_object.primitive_poses[0].position.z = centre.z;
   collision_object.primitive_poses[0].orientation = orientation;
 
-  // define that we will be adding this collision object 
-  // hint: what about collision_object.REMOVE?
+  // Specify that we are adding this collision object
   collision_object.operation = collision_object.ADD;
 
-  // add the collision object to the vector, then apply to planning scene
+  // Add the collision object to the vector and apply to the planning scene
   object_vector.push_back(collision_object);
   planning_scene_interface_.applyCollisionObjects(object_vector);
 
   return;
 }
 
-void
-cw3::removeCollision(std::string object_name)
-{
+
+/**
+ * @brief Removes a collision object from the MoveIt planning scene and RViz.
+ * 
+ * This function creates a collision object message to remove a specified collision object from the MoveIt planning scene and RViz.
+ * 
+ * @param object_name The name of the collision object to be removed.
+ */
+void 
+cw3::removeCollision(std::string object_name) {
+  // Create a collision object message and a vector of these messages
   moveit_msgs::CollisionObject collision_object;
   std::vector<moveit_msgs::CollisionObject> object_vector;
   
-  // input the name and specify we want it removed
+  // Input the name of the object and specify that we want it removed
   collision_object.id = object_name;
   collision_object.operation = collision_object.REMOVE;
 
-  // apply this collision object removal to the scene
+  // Apply the collision object removal to the scene
   object_vector.push_back(collision_object);
   planning_scene_interface_.applyCollisionObjects(object_vector);
 }
 
-void
-cw3::removeObstacles(int obstacle_count)
-{
-  for (int i=0;i<obstacle_count;i++)
-  {
+
+/**
+ * @brief Removes obstacles from the MoveIt planning scene and RViz.
+ * 
+ * This function iterates through a specified number of obstacles and removes them from the MoveIt planning scene and RViz.
+ * 
+ * @param obstacle_count The number of obstacles to be removed.
+ */
+void 
+cw3::removeObstacles(int obstacle_count) {
+  // Iterate through the specified number of obstacles
+  for (int i = 0; i < obstacle_count; i++) {
+    // Remove collision object with name corresponding to the current iteration index
     removeCollision(std::to_string(i));
   }
 }
 
 
-void
-cw3::addGroundCollision(float ground_height)
-{
+
+/**
+ * @brief Adds a ground collision object to the MoveIt planning scene and RViz.
+ * 
+ * This function creates and adds a ground collision object to the MoveIt planning scene and RViz for collision detection.
+ * 
+ * @param ground_height The height of the ground collision object.
+ */
+void 
+cw3::addGroundCollision(float ground_height) {
+  // Define dimensions of the ground collision object
   geometry_msgs::Vector3 ground_dimension;
   ground_dimension.x = 5;
   ground_dimension.y = 5;
   ground_dimension.z = ground_height;
 
+  // Define position of the ground collision object
   geometry_msgs::Point ground_position;
   ground_position.x = 0;
   ground_position.y = 0;
-  ground_position.z = 0.01;
+  ground_position.z = 0.01; // Slightly above the actual ground to prevent collision with objects on the ground
 
+  // Define orientation of the ground collision object
   geometry_msgs::Quaternion ground_orientation;
   ground_orientation.w = 1;
   ground_orientation.x = 0;
   ground_orientation.y = 0;
   ground_orientation.z = 0;
 
-  addCollision(GROUND_COLLISION_,ground_position,ground_dimension,ground_orientation);
+  // Add the ground collision object
+  addCollision(GROUND_COLLISION_, ground_position, ground_dimension, ground_orientation);
 }
+
 
 void
 cw3::addObstacleCollision(geometry_msgs::Point obstacle_centroid,std::string obj_name)
@@ -1064,34 +1162,55 @@ cw3::applyBlackFilter(PointCPtr &input_cloud, PointCPtr &output_cloud) {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-// Filter function with inputs as references to point cloud smart pointers
+/**
+ * @brief Applies a ground filter to a point cloud.
+ * 
+ * This function filters the input point cloud to remove points that meet a specified condition.
+ * 
+ * @param input_cloud The input point cloud to be filtered.
+ * @param output_cloud The output point cloud containing the filtered points.
+ */
 void 
 cw3::applyGroundFilter(PointCPtr &input_cloud, PointCPtr &output_cloud) {
+    // Create a ConditionalRemoval object for filtering
     pcl::ConditionalRemoval<PointT> color_filter;
     color_filter.setInputCloud(input_cloud);
 
-    pcl::PackedRGBComparison<PointT>::Ptr green_condition(new pcl::PackedRGBComparison<PointT>("g",pcl::ComparisonOps::LT,54));
+    // Define a condition based on RGB color
+    pcl::PackedRGBComparison<PointT>::Ptr green_condition(new pcl::PackedRGBComparison<PointT>("g", pcl::ComparisonOps::LT, 54));
     pcl::ConditionAnd<PointT>::Ptr color_cond (new pcl::ConditionAnd<PointT>());
     color_cond->addComparison(green_condition);
     color_filter.setCondition(color_cond);
+
+    // Apply the filter to the input cloud and store the result in the output cloud
     color_filter.filter(*output_cloud);
 }
 
 
-void
-cw3::applyPassthrough(PointCPtr &in_cloud_ptr,
-                      PointCPtr &out_cloud_ptr,
-                      std::string axis,
-                      float threshold)
-{
-  PointCPtr cloud_filtered_y(new PointC);
-  // Apply a pass-through filter on the y-axis
+
+/**
+ * @brief Applies a pass-through filter to a point cloud along a specified axis.
+ * 
+ * This function filters the input point cloud to retain points within a specified range along the given axis.
+ * 
+ * @param in_cloud_ptr The input point cloud to be filtered.
+ * @param out_cloud_ptr The output point cloud containing the filtered points.
+ * @param axis The axis along which the pass-through filter is applied (e.g., "x", "y", "z").
+ * @param threshold The threshold value defining the filtering range along the specified axis.
+ */
+void 
+cw3::applyPassthrough(PointCPtr &in_cloud_ptr, PointCPtr &out_cloud_ptr, std::string axis, float threshold) {
+  // Create a new point cloud pointer for the filtered cloud
+  PointCPtr cloud_filtered(new PointC);
+
+  // Apply a pass-through filter along the specified axis
   pcl::PassThrough<PointT> pass;
   pass.setInputCloud(in_cloud_ptr); // Set the input point cloud
-  pass.setFilterFieldName(axis); // Set the filtering field to the axis
+  pass.setFilterFieldName(axis); // Set the filtering field to the specified axis
   pass.setFilterLimits(-threshold, threshold); // Set the filtering range
   pass.filter(*out_cloud_ptr); // Execute the filtering
 }
+
 
 void
 cw3::applyVX (PointCPtr &in_cloud_ptr,

@@ -119,9 +119,6 @@ public:
   void
   pubFilteredPCMsg (ros::Publisher &pc_pub,
                                PointC &pc);
-
-  geometry_msgs::PointStamped
-  frameTransform(geometry_msgs::Point from_p, std::string from_frame, std::string to_frame);
   
   bool
   pick(geometry_msgs::Point object, 
