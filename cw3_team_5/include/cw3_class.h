@@ -214,6 +214,9 @@ public:
   void 
   publishMarker(float x, float y,float z,int id);
 
+  std::string
+  colorDetermination(float r, float g, float b);
+
 
   ros::NodeHandle nh_;
   ros::ServiceServer t1_service_;

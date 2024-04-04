@@ -555,6 +555,39 @@ cw3::scanEnvironment()
   return full_scene_cloud;
 }
 
+
+/**
+ * @brief Performs color determination for each basket location.
+ *
+ * This function moves the arm to a predefined position, filters a point cloud by color,
+ * calculates cluster centroids, and determines the color of each basket based on the closest centroid.
+ *
+ * @param basket_locs A vector containing the locations of the baskets.
+ * @return A vector of strings representing the determined colors for each basket.
+ */
+std::string 
+cw3::colorDetermination(float r, float g, float b) {
+
+    int colorThreshold = 50; 
+
+    int upper = 150;
+    int lower = 26;
+    // Check if the point matches any known basket colors
+    if (std::fabs(r - upper) < colorThreshold && std::fabs(g - lower) < colorThreshold && std::fabs(b - lower) < colorThreshold) {
+        return "red";
+    }
+    else if (std::fabs(r  - upper) < colorThreshold && std::fabs(g - lower) < colorThreshold && std::fabs(b - upper) < colorThreshold) {
+        return "purple";
+    }
+    else if (std::fabs(r  - lower) < colorThreshold && std::fabs(g - lower) < colorThreshold && std::fabs(b - upper) < colorThreshold) {
+        return "blue";
+    } 
+    else {
+        return "none";
+    }
+
+}
+
 void 
 cw3::publishMarker(float x, float y,float z,int id)
 {
@@ -609,17 +642,26 @@ cw3::t3()
   for (const auto& indices : cluster_indices) {
 
     float sum_x = 0.0, sum_y = 0.0, sum_z = 0.0;
+
+    unsigned long sum_r = 0, sum_g = 0, sum_b = 0;
     
     for (const auto& idx : indices.indices) {
             const auto& point = full_scene_cloud->points[idx];
             sum_x += point.x;
             sum_y += point.y;
             sum_z += point.z;
+            sum_r += point.r;
+            sum_g += point.g;
+            sum_b += point.b;
     }
 
     size_t num_points = indices.indices.size();
     float avg_x = sum_x / num_points;
     float avg_y = sum_y / num_points;
+
+    float avg_r = static_cast<float>(sum_r / num_points);
+    float avg_g = static_cast<float>(sum_g / num_points);
+    float avg_b = static_cast<float>(sum_b / num_points);
 
     geometry_msgs::Point centroid;
     centroid.x = avg_x;
@@ -629,22 +671,33 @@ cw3::t3()
     publishMarker(avg_x,avg_y,0,id);
 
     id++;
-
+    std::cout<<"==================================="<<std::endl;
     std::cout<<"Cluster Size: "<<num_points<<std::endl;
     // std::cout<<"Centroid X: "<<avg_x<<std::endl;
     // std::cout<<"Centroid Y: "<<avg_y<<std::endl;
+    // std::cout<<"Average R: "<<avg_r<<std::endl;
+    // std::cout<<"Average G: "<<avg_g<<std::endl;
+    // std::cout<<"Average B: "<<avg_b<<std::endl;
+
+    std::string cluster_color = colorDetermination(avg_r,avg_g,avg_b);
+
+    std::cout<<"Color: "<<cluster_color<<std::endl;
 
     float min_dist = 9999;
+    float max_dist = 0;
+    float distance;
     geometry_msgs::Point cloud_point;
     cloud_point.z = 0;
     for (const auto& idx : indices.indices) {
             const auto& point = full_scene_cloud->points[idx];
             cloud_point.x = point.x;
             cloud_point.y = point.y;
-            min_dist = std::min(min_dist,euclidDistance(centroid,cloud_point));
+            distance = euclidDistance(centroid,cloud_point);
+            min_dist = std::min(min_dist,distance);
+            max_dist = std::max(max_dist,distance);
     }
 
-    
+    std::cout<<"Max Distance: "<<max_dist<<std::endl;
 
     if (min_dist > 0.01){
       std::cout<<"This is a nought"<<std::endl;
