@@ -21,7 +21,6 @@ solution is contained within the cw3_team_<your_team_number> package */
 #include <pcl/common/centroid.h>
 #include <pcl/common/common.h>
 #include <pcl/common/pca.h>
-#include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/filters/voxel_grid.h>
@@ -29,6 +28,7 @@ solution is contained within the cw3_team_<your_team_number> package */
 #include <pcl/filters/crop_box.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/features/normal_3d.h>
+#include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/ModelCoefficients.h>
 #include <pcl/sample_consensus/method_types.h>
 #include <pcl/sample_consensus/model_types.h>
@@ -41,6 +41,8 @@ solution is contained within the cw3_team_<your_team_number> package */
 #include <tf/transform_listener.h>
 #include <pcl/features/moment_of_inertia_estimation.h>
 #include <pcl/registration/icp.h>
+
+#include <pcl_ros/impl/transforms.hpp>
 
 #include <octomap/octomap.h>
 #include <octomap_msgs/Octomap.h>
@@ -74,6 +76,8 @@ public:
   ros::Publisher full_scene_pub_cloud;
 
   ros::Publisher octomap_publisher;
+
+  ros::Publisher marker_pub;
   
   /** \brief ROS pose publishers. */
   ros::Publisher g_pub_pose;
@@ -105,7 +109,7 @@ public:
   
   bool 
   moveGripper(float width);
-
+  
   float 
   computeOptimalAngle(const PointCPtr& input_cloud, double length, float radius, std::string type);
 
@@ -208,6 +212,12 @@ public:
   std::vector<pcl::PointIndices> 
   dbscanClustering(PointCPtr &cloud);
 
+  PointCPtr
+  scanEnvironment();
+
+  void 
+  publishMarker(float x, float y,float z,int id);
+
 
   ros::NodeHandle nh_;
   ros::ServiceServer t1_service_;
@@ -243,6 +253,7 @@ public:
   
   /** \brief Point Cloud (input) pointer. */
   PointCPtr g_cloud_ptr;
+
   
   /** \brief Point Cloud (filtered) pointer. */
   PointCPtr g_cloud_filtered, g_cloud_filtered2, g_cloud_filtered_color;
@@ -302,7 +313,7 @@ public:
 
   // Angle offset to align gripper with cube
   double angle_offset_ = 3.14159 / 4.0;
-  double gripper_open_ = 100e-3;
+  double gripper_open_ = 80e-3;
   double gripper_closed_ = 0.0;
   double camera_offset_ = -0.04;
 
