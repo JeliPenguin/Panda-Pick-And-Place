@@ -36,6 +36,7 @@ cw3::cw3(ros::NodeHandle nh):
   // Define the publishers
   g_pub_cloud = nh_.advertise<sensor_msgs::PointCloud2> ("filtered_cloud", 1, true);
   full_scene_pub_cloud = nh_.advertise<sensor_msgs::PointCloud2> ("full_scene", 1, true);
+
   g_pub_pose = nh_.advertise<geometry_msgs::PointStamped> ("cyld_pt", 1, true);
   octomap_publisher = nh.advertise<octomap_msgs::Octomap>("/octomap", 1);
 
@@ -127,6 +128,7 @@ cw3::cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg) {
 
   // Reset the pointer to the PointCloud<pcl::PointXYZRGBA> to store the converted point cloud
   pcl::fromPCLPointCloud2(pcl_cloud, *g_cloud_ptr);
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -377,7 +379,6 @@ cw3::computeOptimalAngle(const PointCPtr& input_cloud, double length, float radi
     float optimal_angle = 0.0f;
 
     if (type == "cross"){
-      std::cout << "??????????????????????????????????????????????????????????????????????????????" << std::endl;
       int min_count = 1000;
 
       for (int alpha = -45; alpha <= 45; alpha += 1) {
@@ -426,6 +427,25 @@ cw3::computeOptimalAngle(const PointCPtr& input_cloud, double length, float radi
     return optimal_angle;
 }
 
+
+float 
+cw3::computeOptimalAnglePCA(const PointCPtr& input_cloud)
+{
+  pcl::PCA<PointT> pca;
+  pca.setInputCloud(input_cloud);
+  Eigen::Vector3f eigenvalues = pca.getEigenValues();
+  Eigen::Matrix3f eigenvectors = pca.getEigenVectors();
+
+  // The principal axis direction is the eigenvector corresponding to the largest eigenvalue
+  Eigen::Vector3f principal_axis = eigenvectors.col(0);
+  
+  // Calculate angle
+  Eigen::Vector3f global_y_axis(0, 1, 0);
+  float cosine_of_angle = principal_axis.dot(global_y_axis) / (principal_axis.norm() * global_y_axis.norm());
+
+  return acos(cosine_of_angle);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 void
@@ -436,10 +456,14 @@ cw3::graspAndPlace(geometry_msgs::Point object, geometry_msgs::Point target, std
   // Calculate the angle
   if(shape_type == "cross"){
     angle_radians = computeOptimalAngle(input_cloud, 2.12*size, size, "cross") + M_PI/4; 
-    std::cout << "the angle isi is is isi i:" << angle_radians/M_PI*360 << std::endl;
+    
+    std::cout << "Cross, the angle is: " << angle_radians/M_PI*360 << std::endl;
   }else{
     angle_radians = computeOptimalAngle(input_cloud, 3.5*size, 0.5*size, "nought") - M_PI/4;
-    std::cout << "the angle isi is is isi i:" << angle_radians/M_PI*360 << std::endl;
+
+    std::cout << "Nought, the angle is: " << angle_radians/M_PI*360 << std::endl;
+    std::cout << "Original angle radians: "<<angle_radians<<std::endl;
+
   }
 
   // Avoid obtuse angles, make angles acute
@@ -449,6 +473,8 @@ cw3::graspAndPlace(geometry_msgs::Point object, geometry_msgs::Point target, std
   // Restriction angle between -π/4 and π/4
   if (angle_radians > M_PI / 4) angle_radians -= M_PI/2;
   else if (angle_radians < -M_PI / 4) angle_radians += M_PI/2;
+
+  std::cout<<"Final angle: "<<angle_radians<<std::endl;
 
   // Positional offsets for pick and place
   if(shape_type == "cross"){
@@ -485,7 +511,11 @@ cw3::t1(geometry_msgs::Point object,
 
   applyGroundFilter(g_cloud_ptr, g_cloud_filtered);
 
-  pubFilteredPCMsg(g_pub_cloud, *g_cloud_filtered);
+  PointCPtr world_cloud (new PointC);
+
+  pcl_ros::transformPointCloud(BASE_FRAME_, *g_cloud_filtered, *world_cloud, listener_);
+
+  pubFilteredPCMsg(g_pub_cloud, *world_cloud);
   
   // // 计算质心
   // Eigen::Vector4f centroid;
@@ -515,7 +545,7 @@ cw3::t1(geometry_msgs::Point object,
   else if (angle_radians < -M_PI / 4) angle_radians += M_PI/2;
   
   */
-  graspAndPlace(object,target,shape_type,g_cloud_filtered);
+  graspAndPlace(object,target,shape_type,world_cloud);
   
 
   removeCollision(GROUND_COLLISION_);
@@ -595,7 +625,7 @@ cw3::euclidDistance(geometry_msgs::Point p1, geometry_msgs::Point p2) {
  * 
  * @param ref_object_points Vector containing reference object points.
  * @param mystery_object_point The mystery object point to be compared with the reference points.
- * @return 1 if the mystery object is of the same type as the reference object, 2 otherwise.
+ * @return 1 if the mystery object is of the same type as the reference object 1, 2 otherwise.
  */
 int64_t
 cw3::t2(std::vector<geometry_msgs::PointStamped>& ref_object_points, geometry_msgs::PointStamped mystery_object_point) {
@@ -713,8 +743,10 @@ cw3::scanEnvironment() {
 
     // Apply ground filter and transform point cloud to world frame
     applyGroundFilter(g_cloud_ptr, g_cloud_filtered);
-    pubFilteredPCMsg(g_pub_cloud, *g_cloud_filtered);
+
     pcl_ros::transformPointCloud(BASE_FRAME_, *g_cloud_filtered, *world_cloud, listener_);
+
+    pubFilteredPCMsg(g_pub_cloud, *world_cloud);
 
     // Merge point clouds
     if (i == 0) {
@@ -859,6 +891,7 @@ cw3::t3()
     size_t num_points = indices.indices.size();
     float avg_x = sum_x / num_points;
     float avg_y = sum_y / num_points;
+    float avg_z = sum_z / num_points;
 
     float avg_r = static_cast<float>(sum_r / num_points);
     float avg_g = static_cast<float>(sum_g / num_points);
@@ -912,6 +945,8 @@ cw3::t3()
       extract.setInputCloud(full_scene_cloud);
       extract.setIndices(cluster_indices);
       extract.filter(*cluster_cloud_ptr);
+
+      // applyPassthrough(cluster_cloud_ptr, cluster_cloud_ptr, "z",10,0.05);
 
       if (max_dist > 0.2)
       {
@@ -970,24 +1005,28 @@ cw3::t3()
   if (noughts.size() > crosses.size())
   {
     pubFilteredPCMsg(g_pub_cloud,*noughts_clouds[closest_nought]);
-    graspAndPlace(noughts[closest_nought], basket_point, "nought", noughts_clouds[closest_nought]);
+    transformGraspAndPlace(noughts[closest_nought], basket_point, "nought", noughts_clouds[closest_nought]);
+    // t1(noughts[closest_nought],basket_point,"nought");
   }
   else if (noughts.size() < crosses.size())
   {
     pubFilteredPCMsg(g_pub_cloud,*crosses_clouds[closest_cross]);
-    graspAndPlace(crosses[closest_cross], basket_point, "cross", crosses_clouds[closest_cross]);
+    transformGraspAndPlace(crosses[closest_cross], basket_point, "cross", crosses_clouds[closest_cross]);
+    // t1(crosses[closest_nought],basket_point,"cross");
   } 
   else
   {
     if (closest_nought_distance < closest_cross_distance)
     {
       pubFilteredPCMsg(g_pub_cloud,*noughts_clouds[closest_nought]);
-      graspAndPlace(noughts[closest_nought], basket_point, "nought", noughts_clouds[closest_nought]);
+      transformGraspAndPlace(noughts[closest_nought], basket_point, "nought", noughts_clouds[closest_nought]);
+      // t1(noughts[closest_nought],basket_point,"nought");
     }
     else
     {
       pubFilteredPCMsg(g_pub_cloud,*crosses_clouds[closest_cross]);
-      graspAndPlace(crosses[closest_cross], basket_point, "cross", crosses_clouds[closest_cross]);
+      transformGraspAndPlace(crosses[closest_cross], basket_point, "cross", crosses_clouds[closest_cross]);
+      // t1(crosses[closest_nought],basket_point,"cross");
     }
   }
 
@@ -1002,6 +1041,27 @@ cw3::t3()
   removeObstacles(obstacle_count);
 
   return res;
+}
+
+void
+cw3::transformGraspAndPlace(geometry_msgs::Point object, geometry_msgs::Point target, std::string shape_type, const PointCPtr& input_cloud)
+{
+
+  PointCPtr cloud_copy(new PointC);
+  *cloud_copy = *input_cloud;
+
+  for (auto &point : *cloud_copy) {
+      point.x -= object.x;
+      point.y -= object.y;
+
+      float tmp = point.x;
+
+      point.x = point.y;
+      point.y = tmp;
+  }
+
+
+  graspAndPlace(object,target,shape_type,cloud_copy);
 }
 
 
@@ -1199,7 +1259,7 @@ cw3::applyGroundFilter(PointCPtr &input_cloud, PointCPtr &output_cloud) {
  * @param threshold The threshold value defining the filtering range along the specified axis.
  */
 void 
-cw3::applyPassthrough(PointCPtr &in_cloud_ptr, PointCPtr &out_cloud_ptr, std::string axis, float threshold) {
+cw3::applyPassthrough(PointCPtr &in_cloud_ptr, PointCPtr &out_cloud_ptr, std::string axis, float threshold_upper,float threshold_lower) {
   // Create a new point cloud pointer for the filtered cloud
   PointCPtr cloud_filtered(new PointC);
 
@@ -1207,7 +1267,7 @@ cw3::applyPassthrough(PointCPtr &in_cloud_ptr, PointCPtr &out_cloud_ptr, std::st
   pcl::PassThrough<PointT> pass;
   pass.setInputCloud(in_cloud_ptr); // Set the input point cloud
   pass.setFilterFieldName(axis); // Set the filtering field to the specified axis
-  pass.setFilterLimits(-threshold, threshold); // Set the filtering range
+  pass.setFilterLimits(threshold_lower, threshold_upper); // Set the filtering range
   pass.filter(*out_cloud_ptr); // Execute the filtering
 }
 
@@ -1338,14 +1398,18 @@ cw3::segCylind (PointCPtr &in_cloud_ptr)
  */
 std::vector<pcl::PointIndices> 
 cw3::dbscanClustering(PointCPtr &cloud) {
+    
+    PointCPtr cloud_copy(new PointC);
+    *cloud_copy = *cloud;
+
     // Set the Z coordinates of all points to 0
-    for (auto &point : *cloud) {
+    for (auto &point : *cloud_copy) {
         point.z = 0.0;
     }
 
     // Creating a KdTree object for finding neighbors
     pcl::search::KdTree<PointT>::Ptr tree(new pcl::search::KdTree<PointT>());
-    tree->setInputCloud(cloud);
+    tree->setInputCloud(cloud_copy);
 
     // Create DBSCAN clustering object and set parameters
     std::vector<pcl::PointIndices> cluster_indices;
@@ -1353,7 +1417,7 @@ cw3::dbscanClustering(PointCPtr &cloud) {
     ec.setClusterTolerance(0.007); // 2cm search radius
     ec.setMinClusterSize(100);   // Minimum Cluster Size
     ec.setSearchMethod(tree);
-    ec.setInputCloud(cloud);
+    ec.setInputCloud(cloud_copy);
     ec.extract(cluster_indices);
 
  
