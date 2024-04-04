@@ -172,7 +172,7 @@ cw3::moveAbove(geometry_msgs::Point point, float angle){
   /* This function produces a "gripper facing down" pose given a xyz point */
 
   // Position gripper above point
-  tf2::Quaternion q_x180deg(-1, 0, 0, 0);
+  tf2::Quaternion q_x180deg(1, 0, 0, 0);
   // Gripper Orientation
   tf2::Quaternion q_object;
   q_object.setRPY(0, 0, angle_offset_+angle);
@@ -220,7 +220,7 @@ cw3::moveArm(geometry_msgs::Pose target_pose)
 geometry_msgs::Pose
 cw3::moveAbovePose(geometry_msgs::Point point){
   // Create a quaternion representing a 180-degree rotation along the X-axis for "gripper facing down" orientation.
-  tf2::Quaternion q_x180deg(-1, 0, 0, 0); // Gripper Position
+  tf2::Quaternion q_x180deg(1, 0, 0, 0); // Gripper Position
 
   // Apply additional rotation based on angle_offset_ to adjust the gripper's orientation.
   tf2::Quaternion q_object;
@@ -285,7 +285,7 @@ cw3::pick(geometry_msgs::Point object,
   geometry_msgs::Pose offset_pose = grasp_pose;
   offset_pose.position.z += 0.125;
   geometry_msgs::Pose release_pose = moveAbovePose(Goal);
-  release_pose.position.z += 0.35; 
+  release_pose.position.z += 0.5; 
 
 
   // Close
@@ -294,20 +294,98 @@ cw3::pick(geometry_msgs::Point object,
   moveArm(grasp_pose);
   moveGripper(gripper_closed_);
   
+
   // Takeaway
-  moveArm(offset_pose);
   offset_pose.position.z += 0.125;
   moveArm(offset_pose);
   
   // Place
   moveArm(release_pose);
-  release_pose.position.z -= 0.15;
+  release_pose.position.z -= 0.2;
   moveArm(release_pose);
 
   // Open gripper
   moveGripper(gripper_open_);
   
   return true;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+float cw3::computeOptimalAngle(const PointCPtr& input_cloud, double length, float radius, std::string type) {
+    pcl::KdTreeFLANN<PointT> kdtree;
+    kdtree.setInputCloud(input_cloud);
+
+    std::vector<float> z_values;
+    float z;
+    z_values.reserve(input_cloud->points.size());
+
+    // 收集所有点的z坐标
+    for (const auto& point : input_cloud->points) {
+        z_values.push_back(point.z);
+    }
+
+    // 对z坐标排序
+    std::sort(z_values.begin(), z_values.end());
+
+    size_t n = z_values.size();
+
+    // 计算最接近 1/10*n 的点的索引（向下取整）
+    size_t index = (1 * n / 10); // 计算 1/10 的位置，直接使用整数除法实现向下取整
+
+    // 由于索引是从0开始的，所以这里不需要减1
+    z = z_values[index];
+
+    float optimal_angle = 0.0f;
+
+    if (type == "cross"){
+      std::cout << "??????????????????????????????????????????????????????????????????????????????" << std::endl;
+      int min_count = 1000;
+
+      for (int alpha = -45; alpha <= 45; alpha += 1) {
+          float rad = alpha * M_PI / 180.0;
+          PointT searchPoint; // 使用PointT，即pcl::PointXYZRGBA
+          searchPoint.x = length * std::cos(rad);
+          searchPoint.y = length * std::sin(rad);
+          searchPoint.z = z; // 使用pose提供的z值
+
+          std::vector<int> pointIdxRadiusSearch;
+          std::vector<float> pointRadiusSquaredDistance;
+          int count = kdtree.radiusSearch(searchPoint, radius, pointIdxRadiusSearch, pointRadiusSquaredDistance);
+
+          std::cout << count << std::endl;
+          //std::cout << z_values[0] << "..." << z_values[n-1] << std::endl;
+          if (count < min_count) {
+              min_count = count;
+              optimal_angle = rad;
+          }
+        }
+    }
+    else{
+      int max_count = 0;
+
+      for (int alpha = -45; alpha <= 45; alpha += 1) {
+          float rad = alpha * M_PI / 180.0;
+          PointT searchPoint; // 使用PointT，即pcl::PointXYZRGBA
+          searchPoint.x = length * std::cos(rad);
+          searchPoint.y = length * std::sin(rad);
+          searchPoint.z = z; // 使用pose提供的z值
+
+          std::vector<int> pointIdxRadiusSearch;
+          std::vector<float> pointRadiusSquaredDistance;
+          int count = kdtree.radiusSearch(searchPoint, radius, pointIdxRadiusSearch, pointRadiusSquaredDistance);
+
+          std::cout << count << std::endl;
+          //std::cout << z_values[0] << "..." << z_values[n-1] << std::endl;
+          if (count > max_count) {
+              max_count = count;
+              optimal_angle = rad;
+          }
+        }
+    }
+
+
+    return optimal_angle;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -321,7 +399,7 @@ cw3::t1(geometry_msgs::Point object,
   addGroundCollision();
 
   geometry_msgs::Pose target_pose = moveAbovePose(object);
-  target_pose.position.z = 0.7; 
+  target_pose.position.z = 0.5; 
   target_pose.position.x += camera_offset_; 
   moveArm(target_pose);
 
@@ -330,7 +408,7 @@ cw3::t1(geometry_msgs::Point object,
   // segPlane(g_cloud_filtered);    
   // g_cloud_filtered_color = applyGroundFilter(g_cloud_filtered2);
 
-  applyGroundFilter(g_cloud_ptr,g_cloud_filtered);
+  applyGroundFilter(g_cloud_ptr, g_cloud_filtered);
 
   pubFilteredPCMsg(g_pub_cloud, *g_cloud_filtered);
   
@@ -338,6 +416,7 @@ cw3::t1(geometry_msgs::Point object,
   // Eigen::Vector4f centroid;
   // pcl::compute3DCentroid(*g_cloud_filtered, centroid);
 
+  /*
   // Applied PCA
   pcl::PCA<PointT> pca;
   pca.setInputCloud(g_cloud_filtered);
@@ -360,20 +439,41 @@ cw3::t1(geometry_msgs::Point object,
   if (angle_radians > M_PI / 4) angle_radians -= M_PI/2;
   else if (angle_radians < -M_PI / 4) angle_radians += M_PI/2;
   
+  */
+
+  float angle_radians;
+
+  // Calculate the angle
+  if(shape_type == "cross"){
+    angle_radians = computeOptimalAngle(g_cloud_filtered, 2.12*size, size, "cross") + M_PI/4; 
+    std::cout << "the angle isi is is isi i:" << angle_radians/M_PI*360 << std::endl;
+  }else{
+    angle_radians = computeOptimalAngle(g_cloud_filtered, 3.5*size, 0.5*size, "nought") - M_PI/4;
+    std::cout << "the angle isi is is isi i:" << angle_radians/M_PI*360 << std::endl;
+  }
+
+  // Avoid obtuse angles, make angles acute
+  if (angle_radians > M_PI / 2) angle_radians -= M_PI;
+  else if (angle_radians < -M_PI / 2) angle_radians += M_PI;
+
+  // Restriction angle between -π/4 and π/4
+  if (angle_radians > M_PI / 4) angle_radians -= M_PI/2;
+  else if (angle_radians < -M_PI / 4) angle_radians += M_PI/2;
+
   // Positional offsets for pick and place
   if(shape_type == "cross"){
-    object.x += size * cos(angle_radians);
-    object.y += size * sin(angle_radians);
+    object.x += size * cos(angle_radians) ;
+    object.y -= size * sin(angle_radians) ;
     target.x += size;
     
   }else{
-    object.x += 2 * size * sin(angle_radians);
-    object.y += 2 * size * cos(angle_radians);
+    object.x += 2 * size * sin(angle_radians) ;
+    object.y += 2 * size * cos(angle_radians) ;
     target.y += 2 * size;
-
   }
   
-  pick(object,target, -angle_radians);
+  
+  pick(object, target, angle_radians);
 
   removeCollision(GROUND_COLLISION_);
 
@@ -483,7 +583,7 @@ cw3::t3()
   point3.y = -0.2;
   point3.z = 0.8;
 
-  geometry_msgs::Point point3;
+  geometry_msgs::Point point4;
   point3.x = -0.36;
   point3.y = 0.2;
   point3.z = 0.8;
@@ -662,7 +762,44 @@ cw3::applyGroundFilter(PointCPtr &input_cloud, PointCPtr &output_cloud) {
     color_cond->addComparison(green_condition);
     color_filter.setCondition(color_cond);
     color_filter.filter(*output_cloud);
+    // 打印 output_cloud 的内容
+    std::cout << "Filtered cloud contains " << output_cloud->points.size() << " points." << std::endl;
+    //for (size_t i = 0; i < output_cloud->points.size(); ++i) {
+    //    const auto& point = output_cloud->points[i];
+    //    std::cout << "Point: (" << point.x << ", " << point.y << ", " << point.z << ")" << std::endl;
+    //}
 }
+
+/*
+void cw3::applyGroundFilter(PointCPtr &input_cloud, PointCPtr &output_cloud) {
+    output_cloud.reset(new PointC);
+
+    for (const auto& point : *input_cloud) {
+        float r = static_cast<float>(point.r);
+        float g = static_cast<float>(point.g);
+        float b = static_cast<float>(point.b);
+        
+        
+
+        // 避免除以0，并进行浮点数除法以获得更准确的比率
+        if (r == 0) r = 1.0f;
+        if (b == 0) b = 1.0f;
+
+        if (!(g / r > 1.1f && g / b > 1.1f) && !(std::abs(r-150)<20 && std::abs(g-150)<20 && std::abs(b-150)<20)) {
+            output_cloud->points.push_back(point);
+            std::cout << r << g << b << std::endl;
+        }
+
+    }
+
+    output_cloud->width = output_cloud->points.size();
+    output_cloud->height = 1;
+    output_cloud->is_dense = true;
+
+    std::cout << "Before cloud contains " << input_cloud->points.size() << " points." << std::endl;
+    std::cout << "Filtered cloud contains " << output_cloud->points.size() << " points." << std::endl;
+}
+*/
 
 
 void
