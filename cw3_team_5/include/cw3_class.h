@@ -127,11 +127,14 @@ public:
   pick(geometry_msgs::Point object, 
                   geometry_msgs::Point Goal,
                   float angle);
+
+  void
+  graspAndPlace(geometry_msgs::Point object, geometry_msgs::Point target, std::string shape_type, const PointCPtr& input_cloud, double size=0.04);
+
   bool 
   t1(geometry_msgs::Point object, 
             geometry_msgs::Point target, 
-            std::string shape_type, 
-            double size=0.04);
+            std::string shape_type);
 
   std::string
   determineShape();

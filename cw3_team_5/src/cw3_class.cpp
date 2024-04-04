@@ -392,11 +392,48 @@ float cw3::computeOptimalAngle(const PointCPtr& input_cloud, double length, floa
 
 ///////////////////////////////////////////////////////////////////////////////
 
+void
+cw3::graspAndPlace(geometry_msgs::Point object, geometry_msgs::Point target, std::string shape_type, const PointCPtr& input_cloud, double size)
+{
+  float angle_radians;
+
+  // Calculate the angle
+  if(shape_type == "cross"){
+    angle_radians = computeOptimalAngle(input_cloud, 2.12*size, size, "cross") + M_PI/4; 
+    std::cout << "the angle isi is is isi i:" << angle_radians/M_PI*360 << std::endl;
+  }else{
+    angle_radians = computeOptimalAngle(input_cloud, 3.5*size, 0.5*size, "nought") - M_PI/4;
+    std::cout << "the angle isi is is isi i:" << angle_radians/M_PI*360 << std::endl;
+  }
+
+  // Avoid obtuse angles, make angles acute
+  if (angle_radians > M_PI / 2) angle_radians -= M_PI;
+  else if (angle_radians < -M_PI / 2) angle_radians += M_PI;
+
+  // Restriction angle between -π/4 and π/4
+  if (angle_radians > M_PI / 4) angle_radians -= M_PI/2;
+  else if (angle_radians < -M_PI / 4) angle_radians += M_PI/2;
+
+  // Positional offsets for pick and place
+  if(shape_type == "cross"){
+    object.x += size * cos(angle_radians) ;
+    object.y -= size * sin(angle_radians) ;
+    target.x += size;
+    
+  }else{
+    object.x += 2 * size * sin(angle_radians) ;
+    object.y += 2 * size * cos(angle_radians) ;
+    target.y += 2 * size;
+  }
+  
+  
+  pick(object, target, angle_radians);
+}
+
 bool 
 cw3::t1(geometry_msgs::Point object, 
             geometry_msgs::Point target, 
-            std::string shape_type, 
-            double size)
+            std::string shape_type)
 {
   addGroundCollision();
 
@@ -442,40 +479,8 @@ cw3::t1(geometry_msgs::Point object,
   else if (angle_radians < -M_PI / 4) angle_radians += M_PI/2;
   
   */
-
-  float angle_radians;
-
-  // Calculate the angle
-  if(shape_type == "cross"){
-    angle_radians = computeOptimalAngle(g_cloud_filtered, 2.12*size, size, "cross") + M_PI/4; 
-    std::cout << "the angle isi is is isi i:" << angle_radians/M_PI*360 << std::endl;
-  }else{
-    angle_radians = computeOptimalAngle(g_cloud_filtered, 3.5*size, 0.5*size, "nought") - M_PI/4;
-    std::cout << "the angle isi is is isi i:" << angle_radians/M_PI*360 << std::endl;
-  }
-
-  // Avoid obtuse angles, make angles acute
-  if (angle_radians > M_PI / 2) angle_radians -= M_PI;
-  else if (angle_radians < -M_PI / 2) angle_radians += M_PI;
-
-  // Restriction angle between -π/4 and π/4
-  if (angle_radians > M_PI / 4) angle_radians -= M_PI/2;
-  else if (angle_radians < -M_PI / 4) angle_radians += M_PI/2;
-
-  // Positional offsets for pick and place
-  if(shape_type == "cross"){
-    object.x += size * cos(angle_radians) ;
-    object.y -= size * sin(angle_radians) ;
-    target.x += size;
-    
-  }else{
-    object.x += 2 * size * sin(angle_radians) ;
-    object.y += 2 * size * cos(angle_radians) ;
-    target.y += 2 * size;
-  }
+  graspAndPlace(object,target,shape_type,g_cloud_filtered);
   
-  
-  pick(object, target, angle_radians);
 
   removeCollision(GROUND_COLLISION_);
 
@@ -570,10 +575,18 @@ cw3::scanEnvironment()
   double z = 0.88;
 
   geometry_msgs::Point initPoint;
-  initPoint.x = x;
-  initPoint.y = 0;
-  initPoint.z = z;
 
+  if (crt_ee_position.x != -9999)
+  {
+    initPoint = crt_ee_position;
+    initPoint.z = z;
+  }
+  else{
+    initPoint.x = x;
+    initPoint.y = 0;
+    initPoint.z = z;
+  }
+  
   geometry_msgs::Point point1;
   point1.x = x;
   point1.y = y;
@@ -732,7 +745,10 @@ cw3::t3()
   addGroundCollision();
 
   std::vector<geometry_msgs::Point> noughts;
+  std::vector<PointCPtr> noughts_clouds;
+
   std::vector<geometry_msgs::Point> crosses;
+  std::vector<PointCPtr> crosses_clouds;
 
   int obstacle_count = 0;
 
@@ -747,7 +763,16 @@ cw3::t3()
 
   std::cout<<"Number of clusters: "<<cluster_indices.size()<<std::endl;
 
-  int id = 0;
+  int obs_id = 0;
+
+  int nought_index = 0;
+  int cross_index = 0;
+
+  float closest_nought_distance = 999;
+  float closest_cross_distance = 999;
+
+  int closest_nought;
+  int closest_cross;
 
   for (const auto& indices : cluster_indices) {
 
@@ -773,13 +798,14 @@ cw3::t3()
     float avg_g = static_cast<float>(sum_g / num_points);
     float avg_b = static_cast<float>(sum_b / num_points);
 
+
     geometry_msgs::Point centroid;
     centroid.x = avg_x;
     centroid.y = avg_y;
     centroid.z = 0;
 
-    publishMarker(avg_x,avg_y,0,id);
-    id++;
+    publishMarker(avg_x,avg_y,0,obs_id);
+    obs_id++;
 
     std::cout<<"==================================="<<std::endl;
     std::cout<<"Cluster Size: "<<num_points<<std::endl;
@@ -797,20 +823,29 @@ cw3::t3()
     {
       float min_dist = 9999;
       float max_dist = 0;
-      float distance;
+      float distance_from_centroid;
       geometry_msgs::Point cloud_point;
       cloud_point.z = 0;
       for (const auto& idx : indices.indices) {
               const auto& point = full_scene_cloud->points[idx];
               cloud_point.x = point.x;
               cloud_point.y = point.y;
-              distance = euclidDistance(centroid,cloud_point);
-              min_dist = std::min(min_dist,distance);
-              max_dist = std::max(max_dist,distance);
+              distance_from_centroid = euclidDistance(centroid,cloud_point);
+              min_dist = std::min(min_dist,distance_from_centroid);
+              max_dist = std::max(max_dist,distance_from_centroid);
       }
 
       std::cout<<"Min Distance: "<<min_dist<<std::endl;
       std::cout<<"Max Distance: "<<max_dist<<std::endl;
+
+      float centroid_to_ee_distance = euclidDistance(centroid,crt_ee_position);
+
+      PointCPtr cluster_cloud_ptr (new PointC);
+      pcl::PointIndices::Ptr cluster_indices (new pcl::PointIndices (indices));
+      pcl::ExtractIndices<PointT> extract;
+      extract.setInputCloud(full_scene_cloud);
+      extract.setIndices(cluster_indices);
+      extract.filter(*cluster_cloud_ptr);
 
       if (max_dist > 0.2)
       {
@@ -821,9 +856,27 @@ cw3::t3()
       else if (min_dist > 0.01){
         std::cout<<"This is a nought"<<std::endl;
         noughts.push_back(centroid);
+        noughts_clouds.push_back(cluster_cloud_ptr);
+
+        if (centroid_to_ee_distance < closest_nought_distance)
+        {
+          closest_nought_distance = centroid_to_ee_distance;
+          closest_nought = nought_index;
+        }
+
+        nought_index++;
       }else{
         std::cout<<"This is a cross"<<std::endl;
         crosses.push_back(centroid);
+        crosses_clouds.push_back(cluster_cloud_ptr);
+
+        if (centroid_to_ee_distance < closest_cross_distance)
+        {
+          closest_cross_distance = centroid_to_ee_distance;
+          closest_cross = cross_index;
+        }
+
+        cross_index++;
       }
     }else{
       // add obstacle collision
@@ -850,13 +903,30 @@ cw3::t3()
 
   if (noughts.size() > crosses.size())
   {
-    t1(noughts[0], basket_point, "noughts");
-  }else{
-    t1(crosses[0], basket_point, "crosses");
+    pubFilteredPCMsg(g_pub_cloud,*noughts_clouds[closest_nought]);
+    graspAndPlace(noughts[closest_nought], basket_point, "nought", noughts_clouds[closest_nought]);
+  }
+  else if (noughts.size() < crosses.size())
+  {
+    pubFilteredPCMsg(g_pub_cloud,*crosses_clouds[closest_cross]);
+    graspAndPlace(crosses[closest_cross], basket_point, "cross", crosses_clouds[closest_cross]);
   } 
+  else
+  {
+    if (closest_nought_distance < closest_cross_distance)
+    {
+      pubFilteredPCMsg(g_pub_cloud,*noughts_clouds[closest_nought]);
+      graspAndPlace(noughts[closest_nought], basket_point, "nought", noughts_clouds[closest_nought]);
+    }
+    else
+    {
+      pubFilteredPCMsg(g_pub_cloud,*crosses_clouds[closest_cross]);
+      graspAndPlace(crosses[closest_cross], basket_point, "cross", crosses_clouds[closest_cross]);
+    }
+  }
 
-  int64_t total_num_shapes = static_cast<int>(noughts.size() + crosses.size());
-  int64_t num_most_common = static_cast<int>(std::max(noughts.size(), crosses.size()));
+  int64_t total_num_shapes = static_cast<int64_t>(noughts.size() + crosses.size());
+  int64_t num_most_common = static_cast<int64_t>(std::max(noughts.size(), crosses.size()));
 
   res[0] = total_num_shapes;
   res[1] = num_most_common;
