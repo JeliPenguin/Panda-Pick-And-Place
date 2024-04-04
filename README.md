@@ -1,5 +1,5 @@
 # COMP0129-CW3
-Created by Yuzhou Chen, Zeyu Chen, Jeffrey Li of team 5 as part of COMP0129 Coursework 1.
+Created by Yuzhou Cheng, Zeyu Chen, Jeffrey Li of team 5 as part of COMP0129 Coursework 3.
 ## Prerequisites
 To run this task, the following environment and packages are required:
 - Ubuntu 20.04
@@ -36,7 +36,7 @@ Follow these steps to build the project and run the solution:
     Finally, to run the solution, use the `roslaunch` command with your package name and launch file:
 
     ```bash
-    roslaunch cw1_team_x run_solution.launch
+    roslaunch cw3_team_5 run_solution.launch
     ```
 
     This command will start the ROS nodes and bring up any necessary components as defined in your `run_solution.launch` file.
@@ -57,13 +57,13 @@ rosservice call /task 3
 The task will working.
 ## Description
 ### Task 1
-![alt text](COMP0129-CW3/blob/main/task1.png?raw=true)
+![alt text](task1.png)
 The goal of task 1 is to use a robotic arm to pick up nought/cross and place it into a brown basket. The coordinates are randomly generated and are given in the /task 1 service request.
 ### Task 2
-![alt text](COMP0129-CW3/blob/main/task2.png?raw=true)
+![alt text](task2.png)
 The goal of Task 2 is to determine which reference shape the mystery shape matches. The coordinates of the shapes are randomly generated during and are given in the /task 2 service request.
 ### Task 3
-![alt text](COMP0129-CW3/blob/main/task3?raw=true)
+![alt text](task3.png)
 The goal of Task 3 is to count the total number of shapes, excluding the black obstacles and determine which shape is more common, and pick up and place the most common shape while avoiding obstacles.
 
 ## Troubleshooting
