@@ -563,7 +563,6 @@ std::string
 cw3::determineShape() {
   std::string shape = "nought";
 
-  // Apply voxel grid filter
   applyVX(g_cloud_ptr, g_cloud_filtered);
 
   // Apply ground filter
@@ -580,6 +579,7 @@ cw3::determineShape() {
   float num_points = g_cloud_filtered->size();
 
   // Determine shape based on the number of points
+  std::cout<<"Number of points: "<<num_points<<std::endl;
   if (num_points > 10) {
     return "cross";
   }
@@ -661,6 +661,9 @@ cw3::t2(std::vector<geometry_msgs::PointStamped>& ref_object_points, geometry_ms
 
   // Remove ground collision constraint
   removeCollision(GROUND_COLLISION_);
+
+  std::cout<<"Object One shape: "<<object_types[0]<<std::endl;
+  std::cout<<"Object Two shape: "<<object_types[1]<<std::endl;
 
   // Compare the object types and return the result
   if (object_types[0] == object_types[1]) {
