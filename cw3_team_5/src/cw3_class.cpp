@@ -3,7 +3,7 @@ you can do whatever you want with this template code, including deleting it all
 and starting from scratch. The only requirment is to make sure your entire 
 solution is contained within the cw3_team_<your_team_number> package */
 
-#include <cw3_class.h> // change to your team name here!
+#include <cw3_class.h> // Team 5
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -469,7 +469,7 @@ cw3::graspAndPlace(geometry_msgs::Point object, geometry_msgs::Point target, std
   if (angle_radians > M_PI / 2) angle_radians -= M_PI;
   else if (angle_radians < -M_PI / 2) angle_radians += M_PI;
 
-  // Restriction angle between -π/4 and π/4
+  // Restriction angle between -pi/4 and pi/4
   if (angle_radians > M_PI / 4) angle_radians -= M_PI/2;
   else if (angle_radians < -M_PI / 4) angle_radians += M_PI/2;
 
@@ -513,7 +513,7 @@ cw3::t1(geometry_msgs::Point object,
 
   pubFilteredPCMsg(g_pub_cloud, *g_cloud_filtered);
   
-  // // 计算质心
+  // // calculate centroid
   // Eigen::Vector4f centroid;
   // pcl::compute3DCentroid(*g_cloud_filtered, centroid);
 
@@ -536,7 +536,7 @@ cw3::t1(geometry_msgs::Point object,
   if (angle_radians > M_PI / 2) angle_radians -= M_PI;
   else if (angle_radians < -M_PI / 2) angle_radians += M_PI;
 
-  // Restriction angle between -π/4 and π/4
+  // Restriction angle between -pi/4 and pi/4
   if (angle_radians > M_PI / 4) angle_radians -= M_PI/2;
   else if (angle_radians < -M_PI / 4) angle_radians += M_PI/2;
   
@@ -578,6 +578,21 @@ cw3::determineShape() {
 
   // Get the number of points in the filtered cloud
   float num_points = g_cloud_filtered->size();
+
+
+  std::cout << num_points << std::endl;
+  std::cout << num_points << std::endl;
+  std::cout << num_points << std::endl;
+  std::cout << num_points << std::endl;
+  std::cout << num_points << std::endl;
+
+  std::cout << num_points << std::endl;
+  std::cout << num_points << std::endl;
+  std::cout << num_points << std::endl;
+  std::cout << num_points << std::endl;
+  std::cout << num_points << std::endl;
+
+  
 
   // Determine shape based on the number of points
   if (num_points > 10) {
@@ -1381,8 +1396,8 @@ cw3::segCylind (PointCPtr &in_cloud_ptr)
  *
  * Modifies the Z coordinates of all points in the cloud to 0, effectively flattening the cloud
  * for 2D clustering. It uses a KdTree for efficient neighbor search in the clustering process.
- * The DBSCAN clustering parameters—cluster tolerance, minimum cluster size, and maximum cluster
- * size—are set before extracting the clusters.
+ * The DBSCAN clustering parameters cluster tolerance, minimum cluster size, and maximum cluster
+ * size are set before extracting the clusters.
  *
  * @param cloud A shared pointer to the input point cloud (pcl::PointCloud<pcl::PointXYZRGB>).
  * This cloud is modified in-place by setting the Z coordinates of all points to 0.
@@ -1410,7 +1425,7 @@ cw3::dbscanClustering(PointCPtr &cloud) {
     // Create DBSCAN clustering object and set parameters
     std::vector<pcl::PointIndices> cluster_indices;
     pcl::EuclideanClusterExtraction<PointT> ec;
-    ec.setClusterTolerance(0.007); // 2cm search radius
+    ec.setClusterTolerance(0.007); // Search radius
     ec.setMinClusterSize(100);   // Minimum Cluster Size
     ec.setSearchMethod(tree);
     ec.setInputCloud(cloud_copy);
