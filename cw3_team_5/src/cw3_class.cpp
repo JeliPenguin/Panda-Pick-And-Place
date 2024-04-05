@@ -510,11 +510,8 @@ cw3::t1(geometry_msgs::Point object,
 
   applyGroundFilter(g_cloud_ptr, g_cloud_filtered);
 
-  PointCPtr world_cloud (new PointC);
 
-  pcl_ros::transformPointCloud(BASE_FRAME_, *g_cloud_filtered, *world_cloud, listener_);
-
-  pubFilteredPCMsg(g_pub_cloud, *world_cloud);
+  pubFilteredPCMsg(g_pub_cloud, *g_cloud_filtered);
   
   // // 计算质心
   // Eigen::Vector4f centroid;
@@ -544,7 +541,7 @@ cw3::t1(geometry_msgs::Point object,
   else if (angle_radians < -M_PI / 4) angle_radians += M_PI/2;
   
   */
-  graspAndPlace(object,target,shape_type,world_cloud);
+  graspAndPlace(object,target,shape_type,g_cloud_filtered);
   
 
   removeCollision(GROUND_COLLISION_);
