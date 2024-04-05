@@ -338,16 +338,18 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
   moveArm(offset_pose);
   
   // Move the arm to place the object at the goal position
+  addGroundCollision(0.2f);
   moveArm(release_pose);
-  release_pose.position.z -= 0.15;
-  moveArm(release_pose);
+  removeCollision(GROUND_COLLISION_);
+  addGroundCollision();
+
   release_pose.position.z -= 0.15;
   moveArm(release_pose);
 
   // Open gripper to release the object
   moveGripper(gripper_open_);
 
-  release_pose.position.z += 0.3;
+  release_pose.position.z += 0.2;
   moveArm(release_pose);
   
   return true;
@@ -384,7 +386,7 @@ cw3::computeOptimalAngle(const PointCPtr& input_cloud, double length, float radi
     if (type == "cross"){
       int min_count = 1000;
 
-      for (int alpha = -45; alpha <= 45; alpha += 1) {
+      for (int alpha = 0; alpha < 90; alpha += 1) {
           float rad = alpha * M_PI / 180.0;
           PointT searchPoint; // Use PointT, i.e. pcl::PointXYZRGBA
           searchPoint.x = length * std::cos(rad);
@@ -395,16 +397,20 @@ cw3::computeOptimalAngle(const PointCPtr& input_cloud, double length, float radi
           std::vector<float> pointRadiusSquaredDistance;
           int count = kdtree.radiusSearch(searchPoint, radius, pointIdxRadiusSearch, pointRadiusSquaredDistance);
 
+          std::cout << count << std::endl;
           if (count < min_count) {
               min_count = count;
               optimal_angle = rad;
+          }
+          else if(count == min_count) {
+              optimal_angle = (optimal_angle + rad)/2;
           }
         }
     }
     else{
       int max_count = 0;
 
-      for (int alpha = -45; alpha <= 45; alpha += 1) {
+      for (int alpha = 0; alpha < 90; alpha += 1) {
           float rad = alpha * M_PI / 180.0;
           PointT searchPoint; // Use PointT, i.e. pcl::PointXYZRGBA
           searchPoint.x = length * std::cos(rad);
@@ -418,6 +424,9 @@ cw3::computeOptimalAngle(const PointCPtr& input_cloud, double length, float radi
           if (count > max_count) {
               max_count = count;
               optimal_angle = rad;
+          }
+          else if(count == max_count) {
+              optimal_angle = (optimal_angle + rad)/2;
           }
         }
     }
@@ -454,7 +463,7 @@ cw3::graspAndPlace(geometry_msgs::Point object, geometry_msgs::Point target, std
 
   // Calculate the angle
   if(shape_type == "cross"){
-    angle_radians = computeOptimalAngle(input_cloud, 2.12*size, size, "cross") + M_PI/4; 
+    angle_radians = computeOptimalAngle(input_cloud, 2.12*size, size, "cross") - M_PI/4; 
     
     std::cout << "Cross, the angle is: " << angle_radians/M_PI*360 << std::endl;
   }else{
@@ -578,29 +587,44 @@ cw3::determineShape() {
   // Get the number of points in the filtered cloud
   float num_points = g_cloud_filtered->size();
 
-
-  std::cout << num_points << std::endl;
-  std::cout << num_points << std::endl;
-  std::cout << num_points << std::endl;
-  std::cout << num_points << std::endl;
-  std::cout << num_points << std::endl;
-
-  std::cout << num_points << std::endl;
-  std::cout << num_points << std::endl;
-  std::cout << num_points << std::endl;
-  std::cout << num_points << std::endl;
-  std::cout << num_points << std::endl;
-
-  
-
+  std::cout<<"==================================="<<std::endl;
   // Determine shape based on the number of points
-  std::cout<<"Number of points: "<<num_points<<std::endl;
+  std::cout<<"Number of inside points: "<<num_points<<std::endl;
+  std::cout<<"==================================="<<std::endl;
+  
   if (num_points > 10) {
     return "cross";
   }
 
   return "nought";
 }
+
+
+///////////////////////////////////////////////////////////////////////////////
+
+float 
+cw3::determineSize(std::string type, boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGBA>> point_cloud) {
+    int size = static_cast<int>(point_cloud->size()); // Cast size to int
+
+    if (type == "cross") {
+        if (std::abs(size - 2500) < 1250) {
+            return 0.02f;
+        } else if (std::abs(size - 5000) < 1250) {
+            return 0.03f;
+        } else {
+            return 0.04f;
+        }
+    } else {
+        if (std::abs(size - 4000) < 3000) {
+            return 0.02f;
+        } else if (std::abs(size - 12000) < 3000) {
+            return 0.03f;
+        } else {
+            return 0.04f;
+        }
+    }
+}
+
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1019,13 +1043,15 @@ cw3::t3()
   if (noughts.size() > crosses.size())
   {
     pubFilteredPCMsg(g_pub_cloud,*noughts_clouds[closest_nought]);
-    transformGraspAndPlace(noughts[closest_nought], basket_point, "nought", noughts_clouds[closest_nought]);
+    float size = determineSize("nought", noughts_clouds[closest_nought]);
+    transformGraspAndPlace(noughts[closest_nought], basket_point, "nought", noughts_clouds[closest_nought], size);
     // t1(noughts[closest_nought],basket_point,"nought");
   }
   else if (noughts.size() < crosses.size())
   {
     pubFilteredPCMsg(g_pub_cloud,*crosses_clouds[closest_cross]);
-    transformGraspAndPlace(crosses[closest_cross], basket_point, "cross", crosses_clouds[closest_cross]);
+    float size = determineSize("cross", noughts_clouds[closest_nought]);
+    transformGraspAndPlace(crosses[closest_cross], basket_point, "cross", crosses_clouds[closest_cross], size);
     // t1(crosses[closest_nought],basket_point,"cross");
   } 
   else
@@ -1033,13 +1059,15 @@ cw3::t3()
     if (closest_nought_distance < closest_cross_distance)
     {
       pubFilteredPCMsg(g_pub_cloud,*noughts_clouds[closest_nought]);
-      transformGraspAndPlace(noughts[closest_nought], basket_point, "nought", noughts_clouds[closest_nought]);
+      float size = determineSize("nought", noughts_clouds[closest_nought]);
+      transformGraspAndPlace(noughts[closest_nought], basket_point, "nought", noughts_clouds[closest_nought], size);
       // t1(noughts[closest_nought],basket_point,"nought");
     }
     else
     {
       pubFilteredPCMsg(g_pub_cloud,*crosses_clouds[closest_cross]);
-      transformGraspAndPlace(crosses[closest_cross], basket_point, "cross", crosses_clouds[closest_cross]);
+      float size = determineSize("cross", noughts_clouds[closest_nought]);
+      transformGraspAndPlace(crosses[closest_cross], basket_point, "cross", crosses_clouds[closest_cross], size);
       // t1(crosses[closest_nought],basket_point,"cross");
     }
   }
@@ -1058,7 +1086,7 @@ cw3::t3()
 }
 
 void
-cw3::transformGraspAndPlace(geometry_msgs::Point object, geometry_msgs::Point target, std::string shape_type, const PointCPtr& input_cloud)
+cw3::transformGraspAndPlace(geometry_msgs::Point object, geometry_msgs::Point target, std::string shape_type, const PointCPtr& input_cloud, double size)
 {
 
   PointCPtr cloud_copy(new PointC);
@@ -1075,7 +1103,7 @@ cw3::transformGraspAndPlace(geometry_msgs::Point object, geometry_msgs::Point ta
   }
 
 
-  graspAndPlace(object,target,shape_type,cloud_copy);
+  graspAndPlace(object, target, shape_type, cloud_copy, size);
 }
 
 
@@ -1185,7 +1213,7 @@ cw3::addGroundCollision(float ground_height) {
   geometry_msgs::Point ground_position;
   ground_position.x = 0;
   ground_position.y = 0;
-  ground_position.z = 0.01; // Slightly above the actual ground to prevent collision with objects on the ground
+  ground_position.z = 0.015; // Slightly above the actual ground to prevent collision with objects on the ground
 
   // Define orientation of the ground collision object
   geometry_msgs::Quaternion ground_orientation;

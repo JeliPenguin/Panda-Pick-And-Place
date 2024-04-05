@@ -140,6 +140,9 @@ public:
   std::string
   determineShape();
 
+  float 
+  determineSize(std::string type, boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGBA>> point_cloud);
+
   float
   euclidDistance(geometry_msgs::Point p1,geometry_msgs::Point p2);
 
@@ -150,7 +153,7 @@ public:
   t3();
   
   void
-  transformGraspAndPlace(geometry_msgs::Point object, geometry_msgs::Point target, std::string shape_type, const PointCPtr& input_cloud);
+  transformGraspAndPlace(geometry_msgs::Point object, geometry_msgs::Point target, std::string shape_type, const PointCPtr& input_cloud, double size=0.04);
 
   void
   addCollision(std::string object_name,
@@ -180,8 +183,8 @@ public:
   applyPassthrough(PointCPtr &in_cloud_ptr,
                       PointCPtr &out_cloud_ptr,
                       std::string axis,
-                      float threshold_upper = 0.04,
-                      float threshold_lower = -0.04
+                      float threshold_upper = 0.027,
+                      float threshold_lower = -0.027
                     );
 
   /** \brief Apply Voxel Grid filtering.
@@ -271,7 +274,6 @@ public:
   /** \brief Point Cloud (input) pointer. */
   PointCPtr g_cloud_ptr;
 
-  
   /** \brief Point Cloud (filtered) pointer. */
   PointCPtr g_cloud_filtered, g_cloud_filtered2, g_cloud_filtered_color;
   
