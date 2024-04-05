@@ -181,7 +181,7 @@ public:
                       PointCPtr &out_cloud_ptr,
                       std::string axis,
                       float threshold_upper = 0.04,
-                      float threshold_lower = 0.04
+                      float threshold_lower = -0.04
                     );
 
   /** \brief Apply Voxel Grid filtering.
