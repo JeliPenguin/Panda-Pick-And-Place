@@ -43,6 +43,7 @@ solution is contained within the cw3_team_<your_team_number> package */
 #include <pcl/registration/icp.h>
 
 #include <pcl_ros/impl/transforms.hpp>
+#include <pcl_conversions/pcl_conversions.h>
 
 #include <octomap/octomap.h>
 #include <octomap_msgs/Octomap.h>
@@ -113,6 +114,9 @@ public:
   float 
   computeOptimalAngle(const PointCPtr& input_cloud, double length, float radius, std::string type);
 
+  float 
+  computeOptimalAnglePCA(const PointCPtr& input_cloud);
+
   void
   cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg);
 
@@ -144,6 +148,9 @@ public:
 
   std::array<int64_t, 2>
   t3();
+  
+  void
+  transformGraspAndPlace(geometry_msgs::Point object, geometry_msgs::Point target, std::string shape_type, const PointCPtr& input_cloud);
 
   void
   addCollision(std::string object_name,
@@ -173,7 +180,8 @@ public:
   applyPassthrough(PointCPtr &in_cloud_ptr,
                       PointCPtr &out_cloud_ptr,
                       std::string axis,
-                      float threshold = 0.04
+                      float threshold_upper = 0.04,
+                      float threshold_lower = 0.04
                     );
 
   /** \brief Apply Voxel Grid filtering.
