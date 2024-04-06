@@ -226,7 +226,7 @@ cw3::moveArm(geometry_msgs::Pose target_pose) {
 }
 
 bool cw3::moveArmVertical(geometry_msgs::Pose target_pose) {
-    // Setup the target pose with orientation constraint for vertical movement
+    // Setup the target pose with orientation and position constraints
     ROS_INFO("Setting vertical pose target with orientation and position constraints");
 
     // Define the orientation constraint to maintain the current orientation during vertical movement
@@ -234,30 +234,29 @@ bool cw3::moveArmVertical(geometry_msgs::Pose target_pose) {
     ocm.link_name = arm_group_.getEndEffectorLink();
     ocm.header.frame_id = arm_group_.getPlanningFrame();
     ocm.orientation = arm_group_.getCurrentPose().pose.orientation; // Use current orientation to maintain it
-    ocm.absolute_x_axis_tolerance = 0.2;
-    ocm.absolute_y_axis_tolerance = 0.2;
-    ocm.absolute_z_axis_tolerance = 0.2; // Allow rotation around the Z-axis if needed
+    ocm.absolute_x_axis_tolerance = 0.12;
+    ocm.absolute_y_axis_tolerance = 0.12;
+    ocm.absolute_z_axis_tolerance = 0.15; // Allow rotation around the Z-axis if needed
     ocm.weight = 0.25;
 
-    // Define the position constraint for minimal x and y movement
+    // Define the position constraint using a cylinder for minimal x and y movement
     moveit_msgs::PositionConstraint pcm;
     pcm.link_name = arm_group_.getEndEffectorLink();
     pcm.header.frame_id = arm_group_.getPlanningFrame();
     shape_msgs::SolidPrimitive primitive;
-    primitive.type = shape_msgs::SolidPrimitive::BOX;
-    primitive.dimensions.resize(3);
-    primitive.dimensions[0] = 0.02; // Allow minimal movement in x
-    primitive.dimensions[1] = 0.02; // Allow minimal movement in y
-    primitive.dimensions[2] = 1.0;  // Large movement allowed in z to enable vertical motion
+    primitive.type = shape_msgs::SolidPrimitive::CYLINDER;
+    primitive.dimensions.resize(2); // CYLINDER has 2 dimensions: height (H) and radius (R)
+    primitive.dimensions[shape_msgs::SolidPrimitive::CYLINDER_HEIGHT] = 1.0; // Large height for vertical movement
+    primitive.dimensions[shape_msgs::SolidPrimitive::CYLINDER_RADIUS] = 0.017; // Radius for minimal lateral movement
 
-    geometry_msgs::Pose box_pose; // Position constraint centered on target_pose for x and y, but not constraining z
-    box_pose.position.x = target_pose.position.x;
-    box_pose.position.y = target_pose.position.y;
-    box_pose.position.z = arm_group_.getCurrentPose().pose.position.z; // Use current z position as reference
-    box_pose.orientation = target_pose.orientation; // Use target orientation for alignment
+    geometry_msgs::Pose cylinder_pose; // Position constraint centered on target_pose for x and y, allows vertical movement
+    cylinder_pose.position.x = target_pose.position.x;
+    cylinder_pose.position.y = target_pose.position.y;
+    cylinder_pose.position.z = arm_group_.getCurrentPose().pose.position.z; // Use current z position as reference
+    cylinder_pose.orientation = target_pose.orientation; // Use target orientation for alignment
 
     pcm.constraint_region.primitives.push_back(primitive);
-    pcm.constraint_region.primitive_poses.push_back(box_pose);
+    pcm.constraint_region.primitive_poses.push_back(cylinder_pose);
     pcm.weight = 0.25;
 
     // Add both the orientation and position constraints to the move group
@@ -288,7 +287,6 @@ bool cw3::moveArmVertical(geometry_msgs::Pose target_pose) {
 
     return success;
 }
-
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1135,7 +1133,7 @@ cw3::t3()
     {
       pubFilteredPCMsg(g_pub_cloud,*crosses_clouds[closest_cross]);
       float size = determineSize("cross", crosses_clouds[closest_cross]);
-      gripper_open_ = size+40;
+      gripper_open_ = size+0.04;
       transformGraspAndPlace(crosses[closest_cross], basket_point, "cross", crosses_clouds[closest_cross], size);
       // t1(crosses[closest_nought],basket_point,"cross");
     }
@@ -1298,6 +1296,7 @@ cw3::addGroundCollision(float ground_height) {
 void
 cw3::addObstacleCollision(geometry_msgs::Point obstacle_centroid,std::string obj_name)
 {
+
   geometry_msgs::Quaternion orientation;
   orientation.w = 1;
   orientation.x = 0;
@@ -1307,7 +1306,7 @@ cw3::addObstacleCollision(geometry_msgs::Point obstacle_centroid,std::string obj
   geometry_msgs::Vector3 dimension;
   dimension.x = 0.1;
   dimension.y = 0.1;
-  dimension.z = 0.5;
+  dimension.z = 0.25;
 
   addCollision(obj_name,obstacle_centroid,dimension,orientation);
 }
