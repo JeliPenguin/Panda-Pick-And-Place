@@ -225,6 +225,71 @@ cw3::moveArm(geometry_msgs::Pose target_pose) {
   return success;
 }
 
+bool cw3::moveArmVertical(geometry_msgs::Pose target_pose) {
+    // Setup the target pose with orientation constraint for vertical movement
+    ROS_INFO("Setting vertical pose target with orientation and position constraints");
+
+    // Define the orientation constraint to maintain the current orientation during vertical movement
+    moveit_msgs::OrientationConstraint ocm;
+    ocm.link_name = arm_group_.getEndEffectorLink();
+    ocm.header.frame_id = arm_group_.getPlanningFrame();
+    ocm.orientation = arm_group_.getCurrentPose().pose.orientation; // Use current orientation to maintain it
+    ocm.absolute_x_axis_tolerance = 0.2;
+    ocm.absolute_y_axis_tolerance = 0.2;
+    ocm.absolute_z_axis_tolerance = 0.2; // Allow rotation around the Z-axis if needed
+    ocm.weight = 0.25;
+
+    // Define the position constraint for minimal x and y movement
+    moveit_msgs::PositionConstraint pcm;
+    pcm.link_name = arm_group_.getEndEffectorLink();
+    pcm.header.frame_id = arm_group_.getPlanningFrame();
+    shape_msgs::SolidPrimitive primitive;
+    primitive.type = shape_msgs::SolidPrimitive::BOX;
+    primitive.dimensions.resize(3);
+    primitive.dimensions[0] = 0.02; // Allow minimal movement in x
+    primitive.dimensions[1] = 0.02; // Allow minimal movement in y
+    primitive.dimensions[2] = 1.0;  // Large movement allowed in z to enable vertical motion
+
+    geometry_msgs::Pose box_pose; // Position constraint centered on target_pose for x and y, but not constraining z
+    box_pose.position.x = target_pose.position.x;
+    box_pose.position.y = target_pose.position.y;
+    box_pose.position.z = arm_group_.getCurrentPose().pose.position.z; // Use current z position as reference
+    box_pose.orientation = target_pose.orientation; // Use target orientation for alignment
+
+    pcm.constraint_region.primitives.push_back(primitive);
+    pcm.constraint_region.primitive_poses.push_back(box_pose);
+    pcm.weight = 0.25;
+
+    // Add both the orientation and position constraints to the move group
+    moveit_msgs::Constraints constraints;
+    constraints.orientation_constraints.push_back(ocm);
+    constraints.position_constraints.push_back(pcm);
+    arm_group_.setPathConstraints(constraints);
+
+    // Set the target pose for vertical movement
+    arm_group_.setPoseTarget(target_pose);
+
+    // Attempt to plan and execute the path within the defined constraints
+    ROS_INFO("Attempting to plan the vertical path with combined constraints");
+    moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+    bool success = (arm_group_.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+
+    // Output the planning status
+    ROS_INFO("Visualising vertical plan %s", success ? "with combined constraints" : "FAILED with combined constraints");
+
+    // Execute the planned path if successful
+    if (success) {
+        arm_group_.move();
+        crt_ee_position = target_pose.position; // Update the current end-effector position
+    }
+
+    // Clear the path constraints after planning and execution
+    arm_group_.clearPathConstraints();
+
+    return success;
+}
+
+
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -330,19 +395,19 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
   // Close gripper to pick up the object
   moveArm(offset_pose);
   moveGripper(gripper_open_);
-  moveArm(grasp_pose);
+  moveArmVertical(grasp_pose);
   moveGripper(gripper_closed_);
 
   // Move the arm to take away the object
   offset_pose.position.z += 0.3;
-  moveArm(offset_pose);
+  moveArmVertical(offset_pose);
   
   // Move the arm to place the object at the goal position
   addGroundCollision(0.2f);
   moveArm(release_pose);
 
   release_pose.position.z -= 0.15;
-  moveArm(release_pose);
+  moveArmVertical(release_pose);
 
   // Open gripper to release the object
   moveGripper(gripper_open_);
@@ -398,7 +463,6 @@ cw3::computeOptimalAngle(const PointCPtr& input_cloud, double length, float radi
           std::vector<float> pointRadiusSquaredDistance;
           int count = kdtree.radiusSearch(searchPoint, radius, pointIdxRadiusSearch, pointRadiusSquaredDistance);
 
-          std::cout << count << std::endl;
           if (count < min_count) {
               min_count = count;
               optimal_angle = rad;
@@ -1045,13 +1109,15 @@ cw3::t3()
   {
     pubFilteredPCMsg(g_pub_cloud,*noughts_clouds[closest_nought]);
     float size = determineSize("nought", noughts_clouds[closest_nought]);
+    gripper_open_ = size+0.04;
     transformGraspAndPlace(noughts[closest_nought], basket_point, "nought", noughts_clouds[closest_nought], size);
     // t1(noughts[closest_nought],basket_point,"nought");
   }
   else if (noughts.size() < crosses.size())
   {
     pubFilteredPCMsg(g_pub_cloud,*crosses_clouds[closest_cross]);
-    float size = determineSize("cross", noughts_clouds[closest_nought]);
+    float size = determineSize("cross", crosses_clouds[closest_cross]);
+    gripper_open_ = size+0.04;
     transformGraspAndPlace(crosses[closest_cross], basket_point, "cross", crosses_clouds[closest_cross], size);
     // t1(crosses[closest_nought],basket_point,"cross");
   } 
@@ -1061,13 +1127,15 @@ cw3::t3()
     {
       pubFilteredPCMsg(g_pub_cloud,*noughts_clouds[closest_nought]);
       float size = determineSize("nought", noughts_clouds[closest_nought]);
+      gripper_open_ = size+0.04;
       transformGraspAndPlace(noughts[closest_nought], basket_point, "nought", noughts_clouds[closest_nought], size);
       // t1(noughts[closest_nought],basket_point,"nought");
     }
     else
     {
       pubFilteredPCMsg(g_pub_cloud,*crosses_clouds[closest_cross]);
-      float size = determineSize("cross", noughts_clouds[closest_nought]);
+      float size = determineSize("cross", crosses_clouds[closest_cross]);
+      gripper_open_ = size+40;
       transformGraspAndPlace(crosses[closest_cross], basket_point, "cross", crosses_clouds[closest_cross], size);
       // t1(crosses[closest_nought],basket_point,"cross");
     }
@@ -1102,7 +1170,6 @@ cw3::transformGraspAndPlace(geometry_msgs::Point object, geometry_msgs::Point ta
       point.x = point.y;
       point.y = tmp;
   }
-
 
   graspAndPlace(object, target, shape_type, cloud_copy, size);
 }

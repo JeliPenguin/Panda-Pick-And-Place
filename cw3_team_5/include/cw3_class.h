@@ -107,6 +107,9 @@ public:
   
   bool 
   moveArm(geometry_msgs::Pose target_pose);
+
+  bool 
+  moveArmVertical(geometry_msgs::Pose target_pose);
   
   bool 
   moveGripper(float width);
@@ -332,7 +335,7 @@ public:
 
   // Angle offset to align gripper with cube
   double angle_offset_ = 3.14159 / 4.0;
-  double gripper_open_ = 60e-3;
+  double gripper_open_ = 80e-3;
   double gripper_closed_ = 0.0;
   double camera_offset_ = -0.04;
 
