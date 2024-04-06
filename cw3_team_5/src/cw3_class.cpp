@@ -234,9 +234,9 @@ bool cw3::moveArmVertical(geometry_msgs::Pose target_pose) {
     ocm.link_name = arm_group_.getEndEffectorLink();
     ocm.header.frame_id = arm_group_.getPlanningFrame();
     ocm.orientation = arm_group_.getCurrentPose().pose.orientation; // Use current orientation to maintain it
-    ocm.absolute_x_axis_tolerance = 0.12;
-    ocm.absolute_y_axis_tolerance = 0.12;
-    ocm.absolute_z_axis_tolerance = 0.15; // Allow rotation around the Z-axis if needed
+    ocm.absolute_x_axis_tolerance = 0.13;
+    ocm.absolute_y_axis_tolerance = 0.13;
+    ocm.absolute_z_axis_tolerance = 0.13; // Allow rotation around the Z-axis if needed
     ocm.weight = 0.25;
 
     // Define the position constraint using a cylinder for minimal x and y movement
@@ -280,10 +280,15 @@ bool cw3::moveArmVertical(geometry_msgs::Pose target_pose) {
     if (success) {
         arm_group_.move();
         crt_ee_position = target_pose.position; // Update the current end-effector position
+        // Clear the path constraints after planning and execution   
+        arm_group_.clearPathConstraints();
+    }
+    else{
+        arm_group_.clearPathConstraints();
+        moveArm(target_pose);
     }
 
-    // Clear the path constraints after planning and execution
-    arm_group_.clearPathConstraints();
+
 
     return success;
 }
@@ -401,8 +406,10 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
   moveArmVertical(offset_pose);
   
   // Move the arm to place the object at the goal position
-  addGroundCollision(0.2f);
+  addGroundCollision(0.25f);
   moveArm(release_pose);
+  removeCollision(GROUND_COLLISION_);
+  addGroundCollision();
 
   release_pose.position.z -= 0.15;
   moveArmVertical(release_pose);
@@ -411,10 +418,8 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
   moveGripper(gripper_open_);
 
   release_pose.position.z += 0.25;
-  moveArm(release_pose);
+  moveArmVertical(release_pose);
 
-  removeCollision(GROUND_COLLISION_);
-  addGroundCollision();
   
   return true;
 }
@@ -1308,7 +1313,7 @@ cw3::addObstacleCollision(geometry_msgs::Point obstacle_centroid,std::string obj
   dimension.y = 0.1;
   dimension.z = 0.25;
 
-  addCollision(obj_name,obstacle_centroid,dimension,orientation);
+  //addCollision(obj_name,obstacle_centroid,dimension,orientation);
 }
 
 void 
