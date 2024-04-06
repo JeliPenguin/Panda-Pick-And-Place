@@ -334,7 +334,7 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
   moveGripper(gripper_closed_);
 
   // Move the arm to take away the object
-  offset_pose.position.z += 0.4;
+  offset_pose.position.z += 0.3;
   moveArm(offset_pose);
   
   // Move the arm to place the object at the goal position
