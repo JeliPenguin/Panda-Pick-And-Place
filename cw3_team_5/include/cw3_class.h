@@ -174,7 +174,7 @@ public:
   addGroundCollision(float ground_height=0.02);
 
   void
-  addObstacleCollision(geometry_msgs::Point obstacle_centroid,std::string obj_name);
+  addObstacleCollision(geometry_msgs::Point obstacle_centroid,PointCPtr &output_cloud,std::string obj_name);
 
   void 
   applyGroundFilter(PointCPtr &input_cloud, PointCPtr &output_cloud);

@@ -1104,7 +1104,7 @@ cw3::t3()
     }else{
       // add obstacle collision
       geometry_msgs::Point obstacle_point = centroid;
-      addObstacleCollision(obstacle_point,std::to_string(obstacle_count));
+      addObstacleCollision(obstacle_point,cluster_cloud_ptr,std::to_string(obstacle_count));
 
       obstacle_count++;
     }
@@ -1292,8 +1292,8 @@ void
 cw3::addGroundCollision(float ground_height) {
   // Define dimensions of the ground collision object
   geometry_msgs::Vector3 ground_dimension;
-  ground_dimension.x = 5;
-  ground_dimension.y = 5;
+  ground_dimension.x = 1.4;
+  ground_dimension.y = 1.1;
   ground_dimension.z = ground_height;
 
   // Define position of the ground collision object
@@ -1315,8 +1315,14 @@ cw3::addGroundCollision(float ground_height) {
 
 
 void
-cw3::addObstacleCollision(geometry_msgs::Point obstacle_centroid,std::string obj_name)
+cw3::addObstacleCollision(geometry_msgs::Point obstacle_centroid,PointCPtr &output_cloud,std::string obj_name)
 {
+
+  pcl::PointXYZRGBA min_pt, max_pt;
+  pcl::getMinMax3D(*output_cloud, min_pt, max_pt);
+  double length = max_pt.x - min_pt.x;
+  double width = max_pt.y - min_pt.y;
+  double height = max_pt.z - min_pt.z;
 
   geometry_msgs::Quaternion orientation;
   orientation.w = 1;
@@ -1325,9 +1331,9 @@ cw3::addObstacleCollision(geometry_msgs::Point obstacle_centroid,std::string obj
   orientation.z = 0;
 
   geometry_msgs::Vector3 dimension;
-  dimension.x = 0.1;
-  dimension.y = 0.1;
-  dimension.z = 0.25;
+  dimension.x = length;
+  dimension.y = width;
+  dimension.z = height;
 
   addCollision(obj_name,obstacle_centroid,dimension,orientation);
 }
