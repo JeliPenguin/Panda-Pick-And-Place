@@ -215,9 +215,7 @@ cw3::moveArm(geometry_msgs::Pose target_pose) {
   ROS_INFO("Visualising plan %s", success ? "" : "FAILED");
 
   // Update current end-effector position if planning successful
-  if (success) {
-    crt_ee_position = target_pose.position;
-  }
+  crt_ee_position = target_pose.position;
 
   // Execute the planned path
   arm_group_.move();
@@ -788,17 +786,6 @@ cw3::scanEnvironment() {
   double x = 0.31;
   double y = 0.2;
   double z = 0.88;
-  geometry_msgs::Point initPoint;
-
-  // Set initial point based on current end-effector position or default values
-  if (crt_ee_position.x != -9999) {
-    initPoint = crt_ee_position;
-    initPoint.z = 0.6;
-  } else {
-    initPoint.x = x;
-    initPoint.y = 0;
-    initPoint.z = z;
-  }
   
   // Define corner points of the scanning area
   geometry_msgs::Point point1;
@@ -828,15 +815,46 @@ cw3::scanEnvironment() {
   corners[2] = point3;
   corners[3] = point4;
 
-  // Move arm to initial position
-  geometry_msgs::Pose target_pose = moveAbovePose(initPoint);
-  moveArm(target_pose);
+  geometry_msgs::Pose target_pose;
+
+  // Set initial point based on current end-effector position or default values
+  if (crt_ee_position.x == -9999) {
+    geometry_msgs::Point init_point;
+    init_point.x = x;
+    init_point.y = 0;
+    init_point.z = z;
+    // Move arm to initial position
+    target_pose = moveAbovePose(init_point);
+    moveArm(target_pose);
+  }
+
+  std::cout<<"Crt EE X: "<< crt_ee_position.x <<"Crt EE Y: "<< crt_ee_position.y <<"Crt EE Z: "<< crt_ee_position.z<<std::endl; 
+
+  // Calculate starting corner index
+  int corner_index = 0;
+  float min_dist = 9999;
+  float dist;
+  for (int i = 0; i < corners.size(); ++i) {
+    dist = euclidDistance(corners[i],crt_ee_position);
+    std::cout<<"========================"<<std::endl;
+    std::cout<<"Distance: "<<dist<<std::endl;
+    std::cout<<"========================"<<std::endl;
+    if (dist < min_dist)
+    {
+      corner_index = i;
+      min_dist = dist;
+    }
+  }
+
+  std::cout<<"========================"<<std::endl;
+  std::cout<<"Starting corner index: "<<corner_index<<std::endl;
+  std::cout<<"========================"<<std::endl;
 
   PointCPtr full_scene_cloud (new PointC);
 
   // Iterate through each corner point
   for (size_t i = 0; i < corners.size(); ++i) {
-    const auto& point = corners[i];
+    const auto& point = corners[corner_index];
     target_pose = moveAbovePose(point);
     moveArm(target_pose);
 
@@ -855,6 +873,9 @@ cw3::scanEnvironment() {
     } else {
       *full_scene_cloud += *world_cloud;
     }
+
+    corner_index++;
+    corner_index = corner_index%corners.size();
   }
 
   // Publish the merged point cloud of the entire scene
@@ -1019,6 +1040,13 @@ cw3::t3()
 
     // std::cout<<"Color: "<<cluster_color<<std::endl;
 
+    PointCPtr cluster_cloud_ptr (new PointC);
+    pcl::PointIndices::Ptr cluster_indices (new pcl::PointIndices (indices));
+    pcl::ExtractIndices<PointT> extract;
+    extract.setInputCloud(full_scene_cloud);
+    extract.setIndices(cluster_indices);
+    extract.filter(*cluster_cloud_ptr);
+
     if (cluster_not_black)
     {
       float min_dist = 9999;
@@ -1039,13 +1067,6 @@ cw3::t3()
       std::cout<<"Max Distance: "<<max_dist<<std::endl;
 
       float centroid_to_ee_distance = euclidDistance(centroid,crt_ee_position);
-
-      PointCPtr cluster_cloud_ptr (new PointC);
-      pcl::PointIndices::Ptr cluster_indices (new pcl::PointIndices (indices));
-      pcl::ExtractIndices<PointT> extract;
-      extract.setInputCloud(full_scene_cloud);
-      extract.setIndices(cluster_indices);
-      extract.filter(*cluster_cloud_ptr);
 
       // applyPassthrough(cluster_cloud_ptr, cluster_cloud_ptr, "z",10,0.05);
 
