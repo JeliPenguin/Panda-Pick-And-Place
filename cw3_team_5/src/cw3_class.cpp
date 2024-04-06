@@ -215,9 +215,7 @@ cw3::moveArm(geometry_msgs::Pose target_pose) {
   ROS_INFO("Visualising plan %s", success ? "" : "FAILED");
 
   // Update current end-effector position if planning successful
-  if (success) {
-    crt_ee_position = target_pose.position;
-  }
+  crt_ee_position = target_pose.position;
 
   // Execute the planned path
   arm_group_.move();
@@ -793,17 +791,6 @@ cw3::scanEnvironment() {
   double x = 0.31;
   double y = 0.2;
   double z = 0.88;
-  geometry_msgs::Point initPoint;
-
-  // Set initial point based on current end-effector position or default values
-  if (crt_ee_position.x != -9999) {
-    initPoint = crt_ee_position;
-    initPoint.z = 0.6;
-  } else {
-    initPoint.x = x;
-    initPoint.y = 0;
-    initPoint.z = z;
-  }
   
   // Define corner points of the scanning area
   geometry_msgs::Point point1;
@@ -833,15 +820,46 @@ cw3::scanEnvironment() {
   corners[2] = point3;
   corners[3] = point4;
 
-  // Move arm to initial position
-  geometry_msgs::Pose target_pose = moveAbovePose(initPoint);
-  moveArm(target_pose);
+  geometry_msgs::Pose target_pose;
+
+  // Set initial point based on current end-effector position or default values
+  if (crt_ee_position.x == -9999) {
+    geometry_msgs::Point init_point;
+    init_point.x = x;
+    init_point.y = 0;
+    init_point.z = z;
+    // Move arm to initial position
+    target_pose = moveAbovePose(init_point);
+    moveArm(target_pose);
+  }
+
+  std::cout<<"Crt EE X: "<< crt_ee_position.x <<"Crt EE Y: "<< crt_ee_position.y <<"Crt EE Z: "<< crt_ee_position.z<<std::endl; 
+
+  // Calculate starting corner index
+  int corner_index = 0;
+  float min_dist = 9999;
+  float dist;
+  for (int i = 0; i < corners.size(); ++i) {
+    dist = euclidDistance(corners[i],crt_ee_position);
+    std::cout<<"========================"<<std::endl;
+    std::cout<<"Distance: "<<dist<<std::endl;
+    std::cout<<"========================"<<std::endl;
+    if (dist < min_dist)
+    {
+      corner_index = i;
+      min_dist = dist;
+    }
+  }
+
+  std::cout<<"========================"<<std::endl;
+  std::cout<<"Starting corner index: "<<corner_index<<std::endl;
+  std::cout<<"========================"<<std::endl;
 
   PointCPtr full_scene_cloud (new PointC);
 
   // Iterate through each corner point
   for (size_t i = 0; i < corners.size(); ++i) {
-    const auto& point = corners[i];
+    const auto& point = corners[corner_index];
     target_pose = moveAbovePose(point);
     moveArm(target_pose);
 
@@ -860,6 +878,9 @@ cw3::scanEnvironment() {
     } else {
       *full_scene_cloud += *world_cloud;
     }
+
+    corner_index++;
+    corner_index = corner_index%corners.size();
   }
 
   // Publish the merged point cloud of the entire scene
@@ -1024,6 +1045,13 @@ cw3::t3()
 
     // std::cout<<"Color: "<<cluster_color<<std::endl;
 
+    PointCPtr cluster_cloud_ptr (new PointC);
+    pcl::PointIndices::Ptr cluster_indices (new pcl::PointIndices (indices));
+    pcl::ExtractIndices<PointT> extract;
+    extract.setInputCloud(full_scene_cloud);
+    extract.setIndices(cluster_indices);
+    extract.filter(*cluster_cloud_ptr);
+
     if (cluster_not_black)
     {
       float min_dist = 9999;
@@ -1044,13 +1072,6 @@ cw3::t3()
       std::cout<<"Max Distance: "<<max_dist<<std::endl;
 
       float centroid_to_ee_distance = euclidDistance(centroid,crt_ee_position);
-
-      PointCPtr cluster_cloud_ptr (new PointC);
-      pcl::PointIndices::Ptr cluster_indices (new pcl::PointIndices (indices));
-      pcl::ExtractIndices<PointT> extract;
-      extract.setInputCloud(full_scene_cloud);
-      extract.setIndices(cluster_indices);
-      extract.filter(*cluster_cloud_ptr);
 
       // applyPassthrough(cluster_cloud_ptr, cluster_cloud_ptr, "z",10,0.05);
 
@@ -1087,8 +1108,7 @@ cw3::t3()
       }
     }else{
       // add obstacle collision
-      geometry_msgs::Point obstacle_point = centroid;
-      addObstacleCollision(obstacle_point,std::to_string(obstacle_count));
+      addObstacleCollision(centroid,cluster_cloud_ptr,std::to_string(obstacle_count));
 
       obstacle_count++;
     }
@@ -1276,8 +1296,8 @@ void
 cw3::addGroundCollision(float ground_height) {
   // Define dimensions of the ground collision object
   geometry_msgs::Vector3 ground_dimension;
-  ground_dimension.x = 5;
-  ground_dimension.y = 5;
+  ground_dimension.x = 1.4;
+  ground_dimension.y = 1.1;
   ground_dimension.z = ground_height;
 
   // Define position of the ground collision object
@@ -1299,21 +1319,48 @@ cw3::addGroundCollision(float ground_height) {
 
 
 void
-cw3::addObstacleCollision(geometry_msgs::Point obstacle_centroid,std::string obj_name)
+cw3::addObstacleCollision(geometry_msgs::Point obstacle_centroid,PointCPtr &output_cloud,std::string obj_name)
 {
 
-  geometry_msgs::Quaternion orientation;
-  orientation.w = 1;
-  orientation.x = 0;
-  orientation.y = 0;
-  orientation.z = 0;
+  pcl::PointXYZRGBA min_pt, max_pt;
+  pcl::getMinMax3D(*output_cloud, min_pt, max_pt);
+  double length = max_pt.x - min_pt.x;
+  double width = max_pt.y - min_pt.y;
+  double height = max_pt.z - min_pt.z;
+
+  pcl::MomentOfInertiaEstimation<pcl::PointXYZRGBA> feature_extractor;
+  feature_extractor.setInputCloud(output_cloud);
+  feature_extractor.compute();
+
+  Eigen::Vector3f major_axis, middle_axis, minor_axis;
+  feature_extractor.getEigenVectors(major_axis, middle_axis, minor_axis);
+
+  // // Convert eigenvectors to quaternion
+  // tf::Quaternion orientation;
+  // tf::Matrix3x3 rotation_matrix;
+  // rotation_matrix.setValue(major_axis[0], middle_axis[0], minor_axis[0],
+  //                           major_axis[1], middle_axis[1], minor_axis[1],
+  //                           major_axis[2], middle_axis[2], minor_axis[2]);
+  // rotation_matrix.getRotation(orientation);
+
+  // // Publish the quaternion
+  // geometry_msgs::Quaternion orientation_msg;
+  // tf::quaternionTFToMsg(orientation, orientation_msg);
+
+  geometry_msgs::Quaternion orientation_msg;
+  orientation_msg.w = 1;
+  orientation_msg.x = 0;
+  orientation_msg.y = 0;
+  orientation_msg.z = 0;
 
   geometry_msgs::Vector3 dimension;
-  dimension.x = 0.1;
-  dimension.y = 0.1;
-  dimension.z = 0.25;
+  dimension.x = length;
+  dimension.y = width;
+  dimension.z = height;
 
-  //addCollision(obj_name,obstacle_centroid,dimension,orientation);
+  obstacle_centroid.z = (height/2) + 0.02;
+
+  addCollision(obj_name,obstacle_centroid,dimension,orientation_msg);
 }
 
 void 
