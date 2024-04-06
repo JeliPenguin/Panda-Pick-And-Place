@@ -340,8 +340,6 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
   // Move the arm to place the object at the goal position
   addGroundCollision(0.2f);
   moveArm(release_pose);
-  removeCollision(GROUND_COLLISION_);
-  addGroundCollision();
 
   release_pose.position.z -= 0.15;
   moveArm(release_pose);
@@ -349,8 +347,11 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
   // Open gripper to release the object
   moveGripper(gripper_open_);
 
-  release_pose.position.z += 0.2;
+  release_pose.position.z += 0.25;
   moveArm(release_pose);
+
+  removeCollision(GROUND_COLLISION_);
+  addGroundCollision();
   
   return true;
 }
@@ -505,12 +506,14 @@ cw3::t1(geometry_msgs::Point object,
             geometry_msgs::Point target, 
             std::string shape_type)
 {
-  addGroundCollision();
-
   geometry_msgs::Pose target_pose = moveAbovePose(object);
   target_pose.position.z = 0.5; 
   target_pose.position.x += camera_offset_; 
+
+  addGroundCollision(0.2f); // higher ground collision requirement
   moveArm(target_pose);
+  removeCollision(GROUND_COLLISION_);
+  addGroundCollision();
 
   // applyVX(g_cloud_ptr, g_cloud_filtered);
   // findNormals(g_cloud_filtered);
@@ -518,8 +521,6 @@ cw3::t1(geometry_msgs::Point object,
   // g_cloud_filtered_color = applyGroundFilter(g_cloud_filtered2);
 
   applyGroundFilter(g_cloud_ptr, g_cloud_filtered);
-
-
   pubFilteredPCMsg(g_pub_cloud, *g_cloud_filtered);
   
   // // calculate centroid
