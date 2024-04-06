@@ -1103,8 +1103,7 @@ cw3::t3()
       }
     }else{
       // add obstacle collision
-      geometry_msgs::Point obstacle_point = centroid;
-      addObstacleCollision(obstacle_point,cluster_cloud_ptr,std::to_string(obstacle_count));
+      addObstacleCollision(centroid,cluster_cloud_ptr,std::to_string(obstacle_count));
 
       obstacle_count++;
     }
@@ -1324,18 +1323,39 @@ cw3::addObstacleCollision(geometry_msgs::Point obstacle_centroid,PointCPtr &outp
   double width = max_pt.y - min_pt.y;
   double height = max_pt.z - min_pt.z;
 
-  geometry_msgs::Quaternion orientation;
-  orientation.w = 1;
-  orientation.x = 0;
-  orientation.y = 0;
-  orientation.z = 0;
+  pcl::MomentOfInertiaEstimation<pcl::PointXYZRGBA> feature_extractor;
+  feature_extractor.setInputCloud(output_cloud);
+  feature_extractor.compute();
+
+  Eigen::Vector3f major_axis, middle_axis, minor_axis;
+  feature_extractor.getEigenVectors(major_axis, middle_axis, minor_axis);
+
+  // // Convert eigenvectors to quaternion
+  // tf::Quaternion orientation;
+  // tf::Matrix3x3 rotation_matrix;
+  // rotation_matrix.setValue(major_axis[0], middle_axis[0], minor_axis[0],
+  //                           major_axis[1], middle_axis[1], minor_axis[1],
+  //                           major_axis[2], middle_axis[2], minor_axis[2]);
+  // rotation_matrix.getRotation(orientation);
+
+  // // Publish the quaternion
+  // geometry_msgs::Quaternion orientation_msg;
+  // tf::quaternionTFToMsg(orientation, orientation_msg);
+
+  geometry_msgs::Quaternion orientation_msg;
+  orientation_msg.w = 1;
+  orientation_msg.x = 0;
+  orientation_msg.y = 0;
+  orientation_msg.z = 0;
 
   geometry_msgs::Vector3 dimension;
   dimension.x = length;
   dimension.y = width;
   dimension.z = height;
 
-  addCollision(obj_name,obstacle_centroid,dimension,orientation);
+  obstacle_centroid.z = (height/2) + 0.02;
+
+  addCollision(obj_name,obstacle_centroid,dimension,orientation_msg);
 }
 
 void 
