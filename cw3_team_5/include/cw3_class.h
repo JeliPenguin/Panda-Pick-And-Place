@@ -109,7 +109,7 @@ public:
   moveArm(geometry_msgs::Pose target_pose);
 
   bool 
-  moveArmVertical(geometry_msgs::Pose target_pose);
+  moveArmVertical(geometry_msgs::Pose target_pose, float angle_tol=0.1, float ori_weight=0.25, float radius=0.02, float pos_weight=0.25);
   
   bool 
   moveGripper(float width);
@@ -144,7 +144,7 @@ public:
   determineShape();
 
   float 
-  determineSize(std::string type, boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGBA>> point_cloud);
+  determineSize(std::string type, float max_dist);
 
   float
   euclidDistance(geometry_msgs::Point p1,geometry_msgs::Point p2);

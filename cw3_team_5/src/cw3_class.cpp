@@ -223,7 +223,7 @@ cw3::moveArm(geometry_msgs::Pose target_pose) {
   return success;
 }
 
-bool cw3::moveArmVertical(geometry_msgs::Pose target_pose) {
+bool cw3::moveArmVertical(geometry_msgs::Pose target_pose, float angle_tol, float ori_weight, float radius, float pos_weight) {
     // Setup the target pose with orientation and position constraints
     ROS_INFO("Setting vertical pose target with orientation and position constraints");
 
@@ -232,10 +232,10 @@ bool cw3::moveArmVertical(geometry_msgs::Pose target_pose) {
     ocm.link_name = arm_group_.getEndEffectorLink();
     ocm.header.frame_id = arm_group_.getPlanningFrame();
     ocm.orientation = arm_group_.getCurrentPose().pose.orientation; // Use current orientation to maintain it
-    ocm.absolute_x_axis_tolerance = 0.13;
-    ocm.absolute_y_axis_tolerance = 0.13;
-    ocm.absolute_z_axis_tolerance = 0.13; // Allow rotation around the Z-axis if needed
-    ocm.weight = 0.25;
+    ocm.absolute_x_axis_tolerance = angle_tol;
+    ocm.absolute_y_axis_tolerance = angle_tol;
+    ocm.absolute_z_axis_tolerance = angle_tol; // Allow rotation around the Z-axis if needed
+    ocm.weight = ori_weight;
 
     // Define the position constraint using a cylinder for minimal x and y movement
     moveit_msgs::PositionConstraint pcm;
@@ -245,7 +245,7 @@ bool cw3::moveArmVertical(geometry_msgs::Pose target_pose) {
     primitive.type = shape_msgs::SolidPrimitive::CYLINDER;
     primitive.dimensions.resize(2); // CYLINDER has 2 dimensions: height (H) and radius (R)
     primitive.dimensions[shape_msgs::SolidPrimitive::CYLINDER_HEIGHT] = 1.0; // Large height for vertical movement
-    primitive.dimensions[shape_msgs::SolidPrimitive::CYLINDER_RADIUS] = 0.017; // Radius for minimal lateral movement
+    primitive.dimensions[shape_msgs::SolidPrimitive::CYLINDER_RADIUS] = radius; // Radius for minimal lateral movement
 
     geometry_msgs::Pose cylinder_pose; // Position constraint centered on target_pose for x and y, allows vertical movement
     cylinder_pose.position.x = target_pose.position.x;
@@ -255,7 +255,7 @@ bool cw3::moveArmVertical(geometry_msgs::Pose target_pose) {
 
     pcm.constraint_region.primitives.push_back(primitive);
     pcm.constraint_region.primitive_poses.push_back(cylinder_pose);
-    pcm.weight = 0.25;
+    pcm.weight = pos_weight;
 
     // Add both the orientation and position constraints to the move group
     moveit_msgs::Constraints constraints;
@@ -281,12 +281,12 @@ bool cw3::moveArmVertical(geometry_msgs::Pose target_pose) {
         // Clear the path constraints after planning and execution   
         arm_group_.clearPathConstraints();
     }
+    /*
     else{
         arm_group_.clearPathConstraints();
         moveArm(target_pose);
     }
-
-
+    */
 
     return success;
 }
@@ -393,30 +393,35 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
   geometry_msgs::Pose release_pose = moveAbovePose(Goal);
   release_pose.position.z += 0.5; // Adjust the height for releasing
 
-  // Close gripper to pick up the object
+  // Move above the object
+  addGroundCollision(0.06f);
   moveArm(offset_pose);
+  removeCollision(GROUND_COLLISION_);
+  addGroundCollision();
+
+  // Close gripper to pick up the object
   moveGripper(gripper_open_);
-  moveArmVertical(grasp_pose);
+  moveArmVertical(grasp_pose, 0.1f, 0.35f, 0.02f, 0.35f);
   moveGripper(gripper_closed_);
 
   // Move the arm to take away the object
   offset_pose.position.z += 0.3;
-  moveArmVertical(offset_pose);
+  moveArmVertical(offset_pose, 0.15f, 0.25f, 0.03f, 0.3f);
   
   // Move the arm to place the object at the goal position
-  addGroundCollision(0.25f);
+  addGroundCollision(0.26f);
   moveArm(release_pose);
   removeCollision(GROUND_COLLISION_);
   addGroundCollision();
 
   release_pose.position.z -= 0.15;
-  moveArmVertical(release_pose);
+  moveArmVertical(release_pose, 0.2f, 0.25f, 0.05f, 0.3f);
 
   // Open gripper to release the object
-  moveGripper(gripper_open_);
+  moveGripper(80e-3);
 
   release_pose.position.z += 0.25;
-  moveArmVertical(release_pose);
+  moveArmVertical(release_pose, 0.3f, 0.25f, 0.06f, 0.3f);
 
   
   return true;
@@ -669,24 +674,23 @@ cw3::determineShape() {
 ///////////////////////////////////////////////////////////////////////////////
 
 float 
-cw3::determineSize(std::string type, boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGBA>> point_cloud) {
-    int size = static_cast<int>(point_cloud->size()); // Cast size to int
+cw3::determineSize(std::string type, float max_dist) {
 
     if (type == "cross") {
-        if (std::abs(size - 2500) < 1250) {
+        if (max_dist < 65e-3) {
             return 0.02f;
-        } else if (std::abs(size - 5000) < 1250) {
-            return 0.03f;
-        } else {
+        } else if (max_dist > 97e-3) {
             return 0.04f;
+        } else {
+            return 0.03f;
         }
     } else {
-        if (std::abs(size - 4000) < 3000) {
+        if (max_dist < 96e-3) {
             return 0.02f;
-        } else if (std::abs(size - 12000) < 3000) {
-            return 0.03f;
-        } else {
+        } else if (max_dist > 126e-3) {
             return 0.04f;
+        } else {
+            return 0.03f;
         }
     }
 }
@@ -971,9 +975,11 @@ cw3::t3()
 
   std::vector<geometry_msgs::Point> noughts;
   std::vector<PointCPtr> noughts_clouds;
+  std::vector<float> noughts_max_distances;
 
   std::vector<geometry_msgs::Point> crosses;
   std::vector<PointCPtr> crosses_clouds;
+  std::vector<float> crosses_max_distances;
 
   int obstacle_count = 0;
 
@@ -1085,6 +1091,7 @@ cw3::t3()
         std::cout<<"This is a nought"<<std::endl;
         noughts.push_back(centroid);
         noughts_clouds.push_back(cluster_cloud_ptr);
+        noughts_max_distances.push_back(max_dist);
 
         if (centroid_to_ee_distance < closest_nought_distance)
         {
@@ -1097,6 +1104,7 @@ cw3::t3()
         std::cout<<"This is a cross"<<std::endl;
         crosses.push_back(centroid);
         crosses_clouds.push_back(cluster_cloud_ptr);
+        crosses_max_distances.push_back(max_dist);
 
         if (centroid_to_ee_distance < closest_cross_distance)
         {
@@ -1131,7 +1139,7 @@ cw3::t3()
   if (noughts.size() > crosses.size())
   {
     pubFilteredPCMsg(g_pub_cloud,*noughts_clouds[closest_nought]);
-    float size = determineSize("nought", noughts_clouds[closest_nought]);
+    float size = determineSize("nought", noughts_max_distances[closest_nought]);
     gripper_open_ = size+0.04;
     transformGraspAndPlace(noughts[closest_nought], basket_point, "nought", noughts_clouds[closest_nought], size);
     // t1(noughts[closest_nought],basket_point,"nought");
@@ -1139,7 +1147,7 @@ cw3::t3()
   else if (noughts.size() < crosses.size())
   {
     pubFilteredPCMsg(g_pub_cloud,*crosses_clouds[closest_cross]);
-    float size = determineSize("cross", crosses_clouds[closest_cross]);
+    float size = determineSize("cross", crosses_max_distances[closest_cross]);
     gripper_open_ = size+0.04;
     transformGraspAndPlace(crosses[closest_cross], basket_point, "cross", crosses_clouds[closest_cross], size);
     // t1(crosses[closest_nought],basket_point,"cross");
@@ -1149,7 +1157,7 @@ cw3::t3()
     if (closest_nought_distance < closest_cross_distance)
     {
       pubFilteredPCMsg(g_pub_cloud,*noughts_clouds[closest_nought]);
-      float size = determineSize("nought", noughts_clouds[closest_nought]);
+      float size = determineSize("nought", noughts_max_distances[closest_nought]);
       gripper_open_ = size+0.04;
       transformGraspAndPlace(noughts[closest_nought], basket_point, "nought", noughts_clouds[closest_nought], size);
       // t1(noughts[closest_nought],basket_point,"nought");
@@ -1157,7 +1165,7 @@ cw3::t3()
     else
     {
       pubFilteredPCMsg(g_pub_cloud,*crosses_clouds[closest_cross]);
-      float size = determineSize("cross", crosses_clouds[closest_cross]);
+      float size = determineSize("cross", crosses_max_distances[closest_cross]);
       gripper_open_ = size+0.04;
       transformGraspAndPlace(crosses[closest_cross], basket_point, "cross", crosses_clouds[closest_cross], size);
       // t1(crosses[closest_nought],basket_point,"cross");
@@ -1170,6 +1178,7 @@ cw3::t3()
   res[0] = total_num_shapes;
   res[1] = num_most_common;
 
+  // Remove all collision settings
   removeCollision(GROUND_COLLISION_);
 
   removeObstacles(obstacle_count);
@@ -1194,7 +1203,52 @@ cw3::transformGraspAndPlace(geometry_msgs::Point object, geometry_msgs::Point ta
       point.y = tmp;
   }
 
-  graspAndPlace(object, target, shape_type, cloud_copy, size);
+  float angle_radians;
+
+  // Calculate the angle
+  if(shape_type == "cross"){
+    angle_radians = computeOptimalAngle(cloud_copy, 2.12*size, size, "cross") - M_PI/4; 
+    
+    std::cout << "Cross, the angle is: " << angle_radians/M_PI*360 << std::endl;
+  }else{
+    angle_radians = computeOptimalAngle(cloud_copy, 3.5*size, 0.5*size, "nought") - M_PI/4;
+
+    std::cout << "Nought, the angle is: " << angle_radians/M_PI*360 << std::endl;
+    std::cout << "Original angle radians: "<<angle_radians<<std::endl;
+
+  }
+
+  // Avoid obtuse angles, make angles acute
+  if (angle_radians > M_PI / 2) angle_radians -= M_PI;
+  else if (angle_radians < -M_PI / 2) angle_radians += M_PI;
+
+  // Restriction angle between -pi/4 and pi/4
+  if (angle_radians > M_PI / 4) angle_radians -= M_PI/2;
+  else if (angle_radians < -M_PI / 4) angle_radians += M_PI/2;
+
+  std::cout<<"Final angle: "<<angle_radians<<std::endl;
+
+  // Positional offsets for pick and place
+  if(shape_type == "cross"){
+    object.x += (0.5*size+0.02) * cos(angle_radians) ;
+    object.y -= (0.5*size+0.02) * sin(angle_radians) ;
+    target.x += size;
+    
+  }else{
+    object.x += 2 * size * sin(angle_radians) ;
+    object.y += 2 * size * cos(angle_radians) ;
+    target.y += 2 * size;
+  }
+  
+  geometry_msgs::Pose target_pose = moveAbove(object, angle_radians);
+  target_pose.position.z = 0.5; 
+
+  addGroundCollision(0.2f); // higher ground collision requirement
+  moveArm(target_pose);
+  removeCollision(GROUND_COLLISION_);
+  addGroundCollision();
+
+  pick(object, target, angle_radians);
 }
 
 
@@ -1304,7 +1358,7 @@ cw3::addGroundCollision(float ground_height) {
   geometry_msgs::Point ground_position;
   ground_position.x = 0;
   ground_position.y = 0;
-  ground_position.z = 0.015; // Slightly above the actual ground to prevent collision with objects on the ground
+  ground_position.z = 0.01; // Slightly above the actual ground to prevent collision with objects on the ground
 
   // Define orientation of the ground collision object
   geometry_msgs::Quaternion ground_orientation;
@@ -1354,11 +1408,11 @@ cw3::addObstacleCollision(geometry_msgs::Point obstacle_centroid,PointCPtr &outp
   orientation_msg.z = 0;
 
   geometry_msgs::Vector3 dimension;
-  dimension.x = length;
-  dimension.y = width;
-  dimension.z = height;
+  dimension.x = length/2;
+  dimension.y = width/2;
+  dimension.z = height/2;
 
-  obstacle_centroid.z = (height/2) + 0.02;
+  obstacle_centroid.z = (height/2);
 
   addCollision(obj_name,obstacle_centroid,dimension,orientation_msg);
 }
