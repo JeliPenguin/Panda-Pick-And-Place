@@ -781,6 +781,51 @@ cw3::t2(std::vector<geometry_msgs::PointStamped>& ref_object_points, geometry_ms
   return 2;
 }
 
+void
+cw3::cartesianPathPlan(geometry_msgs::Point start_point,geometry_msgs::Point end_point)
+{
+  int total_steps = 50;
+  float step_size = 1/static_cast<float>(total_steps);
+  float x = end_point.x - start_point.x;
+  float y = end_point.y - start_point.y;
+  float z = end_point.z - start_point.z;
+
+  std::cout<<"Step size: "<<step_size<<std::endl;
+  std::cout<<"Vector: "<<"x: "<<x<<"y: "<<y<<"z: "<<z<<std::endl;
+
+  geometry_msgs::Pose target_pose;
+
+  std::vector<geometry_msgs::Pose> waypoints;  
+
+  // geometry_msgs::Point waypoint;
+  
+  // for (int j = 1; j <= total_steps; ++j)
+  // {
+  //   waypoint.x = start_point.x + j * step_size * x;
+  //   waypoint.y = start_point.y + j * step_size * y;
+  //   waypoint.z = start_point.z + j * step_size * z;
+  //   std::cout<<"Waypoint "<<j<<": "<<"x: "<<waypoint.x<<"y: "<<waypoint.y<<"z: "<<waypoint.z<<std::endl;
+  //   target_pose = moveAbovePose(waypoint);
+  //   waypoints.push_back(target_pose);
+    
+  // }
+
+  target_pose = moveAbovePose(end_point);
+  waypoints.push_back(target_pose);
+
+  moveit_msgs::RobotTrajectory trajectory;
+  const double jump_threshold = 0.0;
+  const double eef_step = 0.01;
+  double fraction = arm_group_.computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory);
+
+  // Execute trajectory
+  moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+  my_plan.trajectory_ = trajectory;
+  arm_group_.execute(my_plan);
+
+  crt_ee_position = end_point;
+}
+
 /**
  * @brief Scans the environment by capturing point clouds from different perspectives.
  * 
@@ -861,11 +906,12 @@ cw3::scanEnvironment() {
 
   PointCPtr full_scene_cloud (new PointC);
 
+  // geometry_msgs::Point start_point = crt_ee_position;
+
   // Iterate through each corner point
   for (size_t i = 0; i < corners.size(); ++i) {
-    const auto& point = corners[corner_index];
-    target_pose = moveAbovePose(point);
-    moveArm(target_pose);
+
+    cartesianPathPlan(crt_ee_position,corners[corner_index]);
 
     PointCPtr world_cloud (new PointC);
 
@@ -885,6 +931,7 @@ cw3::scanEnvironment() {
 
     corner_index++;
     corner_index = corner_index%corners.size();
+    // start_point = crt_ee_position;
   }
 
   // Publish the merged point cloud of the entire scene

@@ -232,6 +232,9 @@ public:
   std::vector<pcl::PointIndices> 
   dbscanClustering(PointCPtr &cloud);
 
+  void
+  cartesianPathPlan(geometry_msgs::Point start_point,geometry_msgs::Point end_point);
+
   PointCPtr
   scanEnvironment();
 
