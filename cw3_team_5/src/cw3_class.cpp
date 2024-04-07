@@ -971,6 +971,15 @@ cw3::publishMarker(float x, float y, float z, int id) {
 std::array<int64_t, 2>
 cw3::t3()
 {
+   
+  // Get the current list of collision object names
+  std::vector<std::string> object_ids = planning_scene_interface_.getKnownObjectNames();
+
+  // Remove all known objects
+  if (!object_ids.empty()) {
+      planning_scene_interface_.removeCollisionObjects(object_ids);
+  }
+
   addGroundCollision();
 
   std::vector<geometry_msgs::Point> noughts;
@@ -1408,9 +1417,9 @@ cw3::addObstacleCollision(geometry_msgs::Point obstacle_centroid,PointCPtr &outp
   orientation_msg.z = 0;
 
   geometry_msgs::Vector3 dimension;
-  dimension.x = length/2;
-  dimension.y = width/2;
-  dimension.z = height/2;
+  dimension.x = length/2 + 0.02;
+  dimension.y = width/2 + 0.02; 
+  dimension.z = height/2 + 0.05;
 
   obstacle_centroid.z = (height/2);
 
