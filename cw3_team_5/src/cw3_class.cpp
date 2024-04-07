@@ -406,7 +406,8 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
 
   // Move the arm to take away the object
   offset_pose.position.z += 0.3;
-  moveArmVertical(offset_pose, 0.15f, 0.3f, 0.03f, 0.3f);
+  // moveArmVertical(offset_pose, 0.15f, 0.3f, 0.03f, 0.3f);
+  cartesianPathPlan(crt_ee_position,offset_pose.position);
   
   // Move the arm to place the object at the goal position
   addGroundCollision(0.26f);
@@ -415,7 +416,8 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
   addGroundCollision();
 
   release_pose.position.z -= 0.15;
-  moveArmVertical(release_pose, 0.3f, 0.3f, 0.1f, 0.3f);
+  // moveArmVertical(release_pose, 0.3f, 0.3f, 0.1f, 0.3f);
+  cartesianPathPlan(crt_ee_position,release_pose.position);
 
   // Open gripper to release the object
   moveGripper(80e-3);
