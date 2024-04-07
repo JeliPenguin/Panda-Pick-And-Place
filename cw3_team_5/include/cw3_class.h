@@ -164,6 +164,9 @@ public:
                 geometry_msgs::Vector3 dimensions,
                 geometry_msgs::Quaternion orientation);
 
+  void 
+  addCylinderCollision(std::string object_name, geometry_msgs::Point centre, float height, float radius);
+
   void
   removeCollision(std::string object_name);
 

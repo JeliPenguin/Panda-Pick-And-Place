@@ -393,9 +393,19 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
   geometry_msgs::Pose release_pose = moveAbovePose(Goal);
   release_pose.position.z += 0.5; // Adjust the height for releasing
 
+
+  geometry_msgs::Pose approach_pose = moveAbove(object, angle);
+  approach_pose.position.z = 0.5; 
+
+  addGroundCollision(0.2f); // higher ground collision requirement
+  moveArm(approach_pose);
+  removeCollision(GROUND_COLLISION_);
+
+
   // Move above the object
   addGroundCollision(0.06f);
-  moveArm(offset_pose);
+  // moveArm(offset_pose);
+  cartesianPathPlan(offset_pose);
   removeCollision(GROUND_COLLISION_);
   addGroundCollision();
 
@@ -406,7 +416,7 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
   moveGripper(gripper_closed_);
 
   // Move the arm to take away the object
-  offset_pose.position.z += 0.3;
+  offset_pose.position.z += 0.26;
   // moveArmVertical(offset_pose, 0.15f, 0.3f, 0.03f, 0.3f);
   cartesianPathPlan(offset_pose);
   
@@ -424,7 +434,8 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
   moveGripper(80e-3);
 
   release_pose.position.z += 0.25;
-  moveArmVertical(release_pose, 0.3f, 0.3f, 0.1f, 0.3f);
+  // moveArmVertical(release_pose, 0.3f, 0.3f, 0.1f, 0.3f);
+  cartesianPathPlan(release_pose);
 
   
   return true;
@@ -913,7 +924,7 @@ cw3::scanEnvironment() {
   for (size_t i = 0; i < corners.size(); ++i) {
 
     target_pose = moveAbovePose(corners[corner_index]);
-    moveArm(target_pose)
+    moveArm(target_pose);
     // cartesianPathPlan(target_pose);
 
     PointCPtr world_cloud (new PointC);
@@ -1298,14 +1309,6 @@ cw3::transformGraspAndPlace(geometry_msgs::Point object, geometry_msgs::Point ta
     object.y += 2 * size * cos(angle_radians) ;
     target.y += 2 * size;
   }
-  
-  geometry_msgs::Pose target_pose = moveAbove(object, angle_radians);
-  target_pose.position.z = 0.5; 
-
-  addGroundCollision(0.2f); // higher ground collision requirement
-  moveArm(target_pose);
-  removeCollision(GROUND_COLLISION_);
-  addGroundCollision();
 
   pick(object, target, angle_radians);
 }
@@ -1355,6 +1358,39 @@ cw3::addCollision(std::string object_name, geometry_msgs::Point centre, geometry
 
   return;
 }
+
+void 
+cw3::addCylinderCollision(std::string object_name, geometry_msgs::Point centre, float height, float radius) {
+  // Create a collision object message and a vector of these messages
+  moveit_msgs::CollisionObject collision_object;
+  std::vector<moveit_msgs::CollisionObject> object_vector;
+
+  // Set header information
+  collision_object.id = object_name;
+  collision_object.header.frame_id = BASE_FRAME_;
+
+  // Define the primitive type and its dimensions as cylinder
+  collision_object.primitives.resize(1);
+  collision_object.primitives[0].type = collision_object.primitives[0].CYLINDER;
+  collision_object.primitives[0].dimensions.resize(2); // Cylinder only has height and radius
+  collision_object.primitives[0].dimensions[shape_msgs::SolidPrimitive::CYLINDER_HEIGHT] = height;
+  collision_object.primitives[0].dimensions[shape_msgs::SolidPrimitive::CYLINDER_RADIUS] = radius;
+
+  // Define the pose of the collision object
+  collision_object.primitive_poses.resize(1);
+  collision_object.primitive_poses[0].position.x = centre.x;
+  collision_object.primitive_poses[0].position.y = centre.y;
+  collision_object.primitive_poses[0].position.z = centre.z;
+
+  // Specify that we are adding this collision object
+  collision_object.operation = collision_object.ADD;
+
+  object_vector.push_back(collision_object);
+  planning_scene_interface_.applyCollisionObjects(object_vector);
+
+  return;
+}
+
 
 
 /**
@@ -1437,43 +1473,15 @@ cw3::addObstacleCollision(geometry_msgs::Point obstacle_centroid,PointCPtr &outp
 
   pcl::PointXYZRGBA min_pt, max_pt;
   pcl::getMinMax3D(*output_cloud, min_pt, max_pt);
-  double length = max_pt.x - min_pt.x;
-  double width = max_pt.y - min_pt.y;
-  double height = max_pt.z - min_pt.z;
+  float length = max_pt.x - min_pt.x;
+  float width = max_pt.y - min_pt.y;
+  float height = max_pt.z - min_pt.z;
 
-  pcl::MomentOfInertiaEstimation<pcl::PointXYZRGBA> feature_extractor;
-  feature_extractor.setInputCloud(output_cloud);
-  feature_extractor.compute();
+  obstacle_centroid.z = (height/2) + 0.05;
 
-  Eigen::Vector3f major_axis, middle_axis, minor_axis;
-  feature_extractor.getEigenVectors(major_axis, middle_axis, minor_axis);
+  float radius = std::sqrt(width*width + length*length) /2;
 
-  // // Convert eigenvectors to quaternion
-  // tf::Quaternion orientation;
-  // tf::Matrix3x3 rotation_matrix;
-  // rotation_matrix.setValue(major_axis[0], middle_axis[0], minor_axis[0],
-  //                           major_axis[1], middle_axis[1], minor_axis[1],
-  //                           major_axis[2], middle_axis[2], minor_axis[2]);
-  // rotation_matrix.getRotation(orientation);
-
-  // // Publish the quaternion
-  // geometry_msgs::Quaternion orientation_msg;
-  // tf::quaternionTFToMsg(orientation, orientation_msg);
-
-  geometry_msgs::Quaternion orientation_msg;
-  orientation_msg.w = 1;
-  orientation_msg.x = 0;
-  orientation_msg.y = 0;
-  orientation_msg.z = 0;
-
-  geometry_msgs::Vector3 dimension;
-  dimension.x = length/2 + 0.02;
-  dimension.y = width/2 + 0.02; 
-  dimension.z = height/2 + 0.05;
-
-  obstacle_centroid.z = (height/2);
-
-  addCollision(obj_name,obstacle_centroid,dimension,orientation_msg);
+  addCylinderCollision(obj_name,obstacle_centroid,height,radius);
 }
 
 void 
