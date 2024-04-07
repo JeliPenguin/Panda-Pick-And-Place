@@ -816,7 +816,7 @@ cw3::cartesianPathPlan(geometry_msgs::Pose end_pose)
 
   moveit_msgs::RobotTrajectory trajectory;
   const double jump_threshold = 0.0;
-  const double eef_step = 0.01;
+  const double eef_step = 0.005;
   double fraction = arm_group_.computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory);
 
   // Execute trajectory
@@ -913,7 +913,8 @@ cw3::scanEnvironment() {
   for (size_t i = 0; i < corners.size(); ++i) {
 
     target_pose = moveAbovePose(corners[corner_index]);
-    cartesianPathPlan(target_pose);
+    moveArm(target_pose)
+    // cartesianPathPlan(target_pose);
 
     PointCPtr world_cloud (new PointC);
 
