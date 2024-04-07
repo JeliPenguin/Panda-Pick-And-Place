@@ -233,7 +233,7 @@ public:
   dbscanClustering(PointCPtr &cloud);
 
   void
-  cartesianPathPlan(geometry_msgs::Point start_point,geometry_msgs::Point end_point);
+  cartesianPathPlan(geometry_msgs::Pose end_pose);
 
   PointCPtr
   scanEnvironment();

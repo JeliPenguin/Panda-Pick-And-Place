@@ -401,13 +401,14 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
 
   // Close gripper to pick up the object
   moveGripper(gripper_open_);
-  moveArmVertical(grasp_pose, 0.1f, 0.35f, 0.02f, 0.35f);
+  // moveArmVertical(grasp_pose, 0.1f, 0.35f, 0.02f, 0.35f);
+  cartesianPathPlan(grasp_pose);
   moveGripper(gripper_closed_);
 
   // Move the arm to take away the object
   offset_pose.position.z += 0.3;
   // moveArmVertical(offset_pose, 0.15f, 0.3f, 0.03f, 0.3f);
-  cartesianPathPlan(crt_ee_position,offset_pose.position);
+  cartesianPathPlan(offset_pose);
   
   // Move the arm to place the object at the goal position
   addGroundCollision(0.26f);
@@ -417,7 +418,7 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
 
   release_pose.position.z -= 0.15;
   // moveArmVertical(release_pose, 0.3f, 0.3f, 0.1f, 0.3f);
-  cartesianPathPlan(crt_ee_position,release_pose.position);
+  cartesianPathPlan(release_pose);
 
   // Open gripper to release the object
   moveGripper(80e-3);
@@ -784,18 +785,17 @@ cw3::t2(std::vector<geometry_msgs::PointStamped>& ref_object_points, geometry_ms
 }
 
 void
-cw3::cartesianPathPlan(geometry_msgs::Point start_point,geometry_msgs::Point end_point)
+cw3::cartesianPathPlan(geometry_msgs::Pose end_pose)
 {
   int total_steps = 50;
   float step_size = 1/static_cast<float>(total_steps);
-  float x = end_point.x - start_point.x;
-  float y = end_point.y - start_point.y;
-  float z = end_point.z - start_point.z;
+  float x = end_pose.position.x - crt_ee_position.x;
+  float y = end_pose.position.y - crt_ee_position.y;
+  float z = end_pose.position.z - crt_ee_position.z;
 
   std::cout<<"Step size: "<<step_size<<std::endl;
   std::cout<<"Vector: "<<"x: "<<x<<"y: "<<y<<"z: "<<z<<std::endl;
 
-  geometry_msgs::Pose target_pose;
 
   std::vector<geometry_msgs::Pose> waypoints;  
 
@@ -812,8 +812,7 @@ cw3::cartesianPathPlan(geometry_msgs::Point start_point,geometry_msgs::Point end
     
   // }
 
-  target_pose = moveAbovePose(end_point);
-  waypoints.push_back(target_pose);
+  waypoints.push_back(end_pose);
 
   moveit_msgs::RobotTrajectory trajectory;
   const double jump_threshold = 0.0;
@@ -825,7 +824,7 @@ cw3::cartesianPathPlan(geometry_msgs::Point start_point,geometry_msgs::Point end
   my_plan.trajectory_ = trajectory;
   arm_group_.execute(my_plan);
 
-  crt_ee_position = end_point;
+  crt_ee_position = end_pose.position;
 }
 
 /**
@@ -881,7 +880,7 @@ cw3::scanEnvironment() {
     init_point.z = z;
     // Move arm to initial position
     target_pose = moveAbovePose(init_point);
-    moveArm(target_pose);
+    cartesianPathPlan(target_pose);
   }
 
   std::cout<<"Crt EE X: "<< crt_ee_position.x <<"Crt EE Y: "<< crt_ee_position.y <<"Crt EE Z: "<< crt_ee_position.z<<std::endl; 
@@ -913,7 +912,8 @@ cw3::scanEnvironment() {
   // Iterate through each corner point
   for (size_t i = 0; i < corners.size(); ++i) {
 
-    cartesianPathPlan(crt_ee_position,corners[corner_index]);
+    target_pose = moveAbovePose(corners[corner_index]);
+    cartesianPathPlan(target_pose);
 
     PointCPtr world_cloud (new PointC);
 
