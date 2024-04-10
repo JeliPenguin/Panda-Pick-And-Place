@@ -1310,6 +1310,14 @@ cw3::transformGraspAndPlace(geometry_msgs::Point object, geometry_msgs::Point ta
     target.y += 2 * size;
   }
 
+  geometry_msgs::Pose target_pose = moveAbove(object, angle_radians);
+  target_pose.position.z = 0.5; 
+
+  addGroundCollision(0.2f); // higher ground collision requirement
+  moveArm(target_pose);
+  removeCollision(GROUND_COLLISION_);
+  addGroundCollision();
+
   pick(object, target, angle_radians);
 }
 
