@@ -692,10 +692,37 @@ cw3::determineSize(std::string type, float max_dist) {
 
     if (type == "cross") {
         if (max_dist < 65e-3) {
+            std::cout << 0.02f << std::endl;
+            std::cout << 0.02f << std::endl;
+            std::cout << 0.02f << std::endl;
+            std::cout << 0.02f << std::endl;
+            std::cout << 0.02f << std::endl;
+            std::cout << 0.02f << std::endl;
+            std::cout << 0.02f << std::endl;
+            std::cout << 0.02f << std::endl;
+            std::cout << 0.02f << std::endl;
             return 0.02f;
         } else if (max_dist > 97e-3) {
+            std::cout << 0.04f << std::endl;
+            std::cout << 0.04f << std::endl;
+            std::cout << 0.04f << std::endl;
+            std::cout << 0.04f << std::endl;
+            std::cout << 0.04f << std::endl;
+            std::cout << 0.04f << std::endl;
+            std::cout << 0.04f << std::endl;
+            std::cout << 0.04f << std::endl;
+            std::cout << 0.04f << std::endl;
             return 0.04f;
         } else {
+            std::cout << 0.03f << std::endl;
+            std::cout << 0.03f << std::endl;
+            std::cout << 0.03f << std::endl;
+            std::cout << 0.03f << std::endl;
+            std::cout << 0.03f << std::endl;
+            std::cout << 0.03f << std::endl;
+            std::cout << 0.03f << std::endl;
+            std::cout << 0.03f << std::endl;
+            std::cout << 0.03f << std::endl;
             return 0.03f;
         }
     } else {
