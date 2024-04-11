@@ -1,7 +1,24 @@
-/* feel free to change any part of this file, or delete this file. In general,
-you can do whatever you want with this template code, including deleting it all
-and starting from scratch. The only requirment is to make sure your entire 
-solution is contained within the cw3_team_<your_team_number> package */
+/*
+Copyright (c) [2024] [Zeyu Chen, Yuzhou Chen, Jeffrey Li]
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
 
 #include <cw3_class.h> // Team 5
 
@@ -154,9 +171,6 @@ cw3::pubFilteredPCMsg(ros::Publisher &pc_pub, PointC &pc) {
   return;
 }
 
-
-///////////////////////////////////////////////////////////////////////////////
-// Task 1
 ///////////////////////////////////////////////////////////////////////////////
 
 /**
@@ -223,6 +237,20 @@ cw3::moveArm(geometry_msgs::Pose target_pose) {
   return success;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
+/**
+ * @brief Moves the robotic arm to a specified target pose vertically while maintaining its current orientation.
+ * 
+ * This function configures and applies orientation and position constraints to ensure that the arm moves vertically 
+ * to the target pose, maintaining its current orientation throughout the motion. The function sets up the target pose 
+ * with these constraints, plans a movement path within these constraints, and executes the planned path if successful.
+ * 
+ * @param target_pose The target pose to which the arm should move vertically. The orientation of the target pose 
+ * is used to align the position constraint region, and the position defines the final location of the end-effector.
+ * @return True if the arm successfully moves to the target pose within the defined constraints, false otherwise.
+ */
+ 
 bool cw3::moveArmVertical(geometry_msgs::Pose target_pose, float angle_tol, float ori_weight, float radius, float pos_weight) {
     // Setup the target pose with orientation and position constraints
     ROS_INFO("Setting vertical pose target with orientation and position constraints");
@@ -397,11 +425,6 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
   geometry_msgs::Pose approach_pose = moveAbove(object, angle);
   approach_pose.position.z = 0.5; 
 
-  // addGroundCollision(0.2f); // higher ground collision requirement
-  // moveArm(approach_pose);
-  // removeCollision(GROUND_COLLISION_);
-
-
   // Move above the object
   addGroundCollision(0.06f);
   moveArm(offset_pose);
@@ -444,6 +467,23 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
 
 
 ///////////////////////////////////////////////////////////////////////////////
+
+/**
+ * @brief Computes the optimal angle for placing a cross or maximizing points within a specified radius.
+ * 
+ * This function analyzes a given point cloud to determine the optimal angle at which to either place a cross 
+ * or maximize the number of points within a specified radius. The decision is based on the type specified by 
+ * the user ("cross" for placing a cross with minimal overlap with points, "max" for maximizing overlap). 
+ * It first filters the z-coordinate to target a specific layer of the point cloud. Then, it iterates over 
+ * possible angles, performing a radius search around a point projected at each angle from the origin, 
+ * to either minimize or maximize the count of points within the radius, depending on the operation type.
+ * 
+ * @param input_cloud A shared pointer to the input point cloud.
+ * @param length The length from the origin to the search point along the specified angle.
+ * @param radius The radius within which to search for points around the search point.
+ * @param type A string specifying the operation type: "cross" to find an angle minimizing point count within the radius, "max" for maximizing it.
+ * @return The optimal angle (in radians) for the specified operation.
+ */
 
 float 
 cw3::computeOptimalAngle(const PointCPtr& input_cloud, double length, float radius, std::string type) {
@@ -521,7 +561,24 @@ cw3::computeOptimalAngle(const PointCPtr& input_cloud, double length, float radi
     return optimal_angle;
 }
 
+///////////////////////////////////////////////////////////////////////////////
 
+/**
+ * @brief Computes the angle between the principal axis of a point cloud and the global Y-axis using PCA.
+ * 
+ * This function applies Principal Component Analysis (PCA) to the input point cloud to find its principal axis, 
+ * which is the direction of maximum variance. It then computes the angle between this principal axis and the global Y-axis. 
+ * This angle can be useful for understanding the orientation of objects within the point cloud or for aligning the point cloud 
+ * with a reference axis.
+ * 
+ * The principal axis is determined by the eigenvector associated with the largest eigenvalue from the PCA. The angle is 
+ * calculated as the arccosine of the dot product between the principal axis vector and the global Y-axis, normalized by 
+ * their magnitudes.
+ * 
+ * @param input_cloud A shared pointer to the input point cloud.
+ * @return The angle in radians between the point cloud's principal axis and the global Y-axis.
+ */
+ 
 float 
 cw3::computeOptimalAnglePCA(const PointCPtr& input_cloud)
 {
@@ -541,6 +598,22 @@ cw3::computeOptimalAnglePCA(const PointCPtr& input_cloud)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+
+/**
+ * @brief Grasps an object of a specified shape and size at its location and places it at a target location.
+ * 
+ * This function calculates the optimal angle for grasping an object based on its shape, using the point cloud data of 
+ * the surrounding environment to avoid collisions and ensure a successful grasp. It distinguishes between 'cross' and 
+ * 'nought' shapes, applying different strategies for angle calculation and adjusting the grasp position accordingly. 
+ * After computing the angle and making necessary adjustments to ensure it is acute and within specified limits, 
+ * the function then calculates positional offsets for both the object and the target to optimize the pick-and-place task.
+ * Finally, it executes the pick-and-place operation at the calculated angle and with the determined offsets.
+ * @param object The geometry_msgs::Point representing the object's starting position.
+ * @param target The geometry_msgs::Point representing the target position for placement.
+ * @param shape_type A string indicating the shape of the object ('cross' or 'nought').
+ * @param input_cloud A shared pointer to the point cloud data, used for calculating the optimal grasp angle.
+ * @param size The size parameter of the object, influencing the calculation of the grasp angle and positional offsets.
+ */
 
 void
 cw3::graspAndPlace(geometry_msgs::Point object, geometry_msgs::Point target, std::string shape_type, const PointCPtr& input_cloud, double size)
@@ -586,6 +659,8 @@ cw3::graspAndPlace(geometry_msgs::Point object, geometry_msgs::Point target, std
   pick(object, target, angle_radians);
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
 bool 
 cw3::t1(geometry_msgs::Point object, 
             geometry_msgs::Point target, 
@@ -600,42 +675,9 @@ cw3::t1(geometry_msgs::Point object,
   removeCollision(GROUND_COLLISION_);
   addGroundCollision();
 
-  // applyVX(g_cloud_ptr, g_cloud_filtered);
-  // findNormals(g_cloud_filtered);
-  // segPlane(g_cloud_filtered);    
-  // g_cloud_filtered_color = applyGroundFilter(g_cloud_filtered2);
-
   applyGroundFilter(g_cloud_ptr, g_cloud_filtered);
   pubFilteredPCMsg(g_pub_cloud, *g_cloud_filtered);
   
-  // // calculate centroid
-  // Eigen::Vector4f centroid;
-  // pcl::compute3DCentroid(*g_cloud_filtered, centroid);
-
-  /*
-  // Applied PCA
-  pcl::PCA<PointT> pca;
-  pca.setInputCloud(g_cloud_filtered);
-  Eigen::Vector3f eigenvalues = pca.getEigenValues();
-  Eigen::Matrix3f eigenvectors = pca.getEigenVectors();
-
-  // The principal axis direction is the eigenvector corresponding to the largest eigenvalue
-  Eigen::Vector3f principal_axis = eigenvectors.col(0);
-  
-  // Calculate angle
-  Eigen::Vector3f global_y_axis(0, 1, 0);
-  float cosine_of_angle = principal_axis.dot(global_y_axis) / (principal_axis.norm() * global_y_axis.norm());
-  float angle_radians = acos(cosine_of_angle);
-  
-  // Avoid obtuse angles, make angles acute
-  if (angle_radians > M_PI / 2) angle_radians -= M_PI;
-  else if (angle_radians < -M_PI / 2) angle_radians += M_PI;
-
-  // Restriction angle between -pi/4 and pi/4
-  if (angle_radians > M_PI / 4) angle_radians -= M_PI/2;
-  else if (angle_radians < -M_PI / 4) angle_radians += M_PI/2;
-  
-  */
   graspAndPlace(object,target,shape_type,g_cloud_filtered);
   
 
@@ -685,45 +727,34 @@ cw3::determineShape() {
   return "nought";
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
+
+/**
+ * @brief Determines the size of an object based on its type and the number of points in its point cloud.
+ * 
+ * This function estimates the size of an object by analyzing the point cloud associated with it. The size estimation 
+ * depends on the object's type ('cross' or another specified type) and the total number of points in the point cloud. 
+ * Different thresholds of point counts are used to categorize the object into one of several size categories, each associated 
+ * with a predefined size value. These size values are determined based on empirical observations or predefined standards 
+ * relating the point count to the physical size of the object.
+ * 
+ * The function provides a simplified mechanism to estimate object size, useful in scenarios where direct measurement 
+ * might not be feasible or where a quick estimation is sufficient.
+ * 
+ * @param type A string representing the type of the object ('cross' or other types).
+ * @param point_cloud A shared pointer to the object's point cloud data.
+ * @return The estimated size of the object as a float, based on the analysis of its point cloud.
+ */
 
 float 
 cw3::determineSize(std::string type, float max_dist) {
 
     if (type == "cross") {
         if (max_dist < 65e-3) {
-            std::cout << 0.02f << std::endl;
-            std::cout << 0.02f << std::endl;
-            std::cout << 0.02f << std::endl;
-            std::cout << 0.02f << std::endl;
-            std::cout << 0.02f << std::endl;
-            std::cout << 0.02f << std::endl;
-            std::cout << 0.02f << std::endl;
-            std::cout << 0.02f << std::endl;
-            std::cout << 0.02f << std::endl;
             return 0.02f;
         } else if (max_dist > 97e-3) {
-            std::cout << 0.04f << std::endl;
-            std::cout << 0.04f << std::endl;
-            std::cout << 0.04f << std::endl;
-            std::cout << 0.04f << std::endl;
-            std::cout << 0.04f << std::endl;
-            std::cout << 0.04f << std::endl;
-            std::cout << 0.04f << std::endl;
-            std::cout << 0.04f << std::endl;
-            std::cout << 0.04f << std::endl;
             return 0.04f;
         } else {
-            std::cout << 0.03f << std::endl;
-            std::cout << 0.03f << std::endl;
-            std::cout << 0.03f << std::endl;
-            std::cout << 0.03f << std::endl;
-            std::cout << 0.03f << std::endl;
-            std::cout << 0.03f << std::endl;
-            std::cout << 0.03f << std::endl;
-            std::cout << 0.03f << std::endl;
-            std::cout << 0.03f << std::endl;
             return 0.03f;
         }
     } else {
@@ -760,6 +791,8 @@ cw3::euclidDistance(geometry_msgs::Point p1, geometry_msgs::Point p2) {
   // Compute Euclidean distance
   return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
+
+///////////////////////////////////////////////////////////////////////////////
 
 /**
  * @brief Determines the type of the mystery object relative to reference object points.
@@ -823,6 +856,20 @@ cw3::t2(std::vector<geometry_msgs::PointStamped>& ref_object_points, geometry_ms
   return 2;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
+/**
+ * @brief Plans and executes a Cartesian path for the robot arm to reach a specified end pose.
+ * 
+ * This function computes a Cartesian path for the robot arm to move smoothly from its current end-effector position to the specified end pose.
+ * The path is planned in steps to ensure precision, with the motion divided into 50 segments. The function first calculates the distance vector
+ * between the current and the desired end-effector positions, and then uses this vector to generate waypoints. The Cartesian path is generated using
+ * these waypoints. Once the path is successfully computed, the function executes this trajectory to move the robot arm.
+ * The current position of the end-effector is updated after executing the trajectory.
+ * 
+ * @param end_pose The target pose for the end-effector, consisting of position and orientation coordinates.
+ */
+
 void
 cw3::cartesianPathPlan(geometry_msgs::Pose end_pose)
 {
@@ -838,19 +885,6 @@ cw3::cartesianPathPlan(geometry_msgs::Pose end_pose)
 
   std::vector<geometry_msgs::Pose> waypoints;  
 
-  // geometry_msgs::Point waypoint;
-  
-  // for (int j = 1; j <= total_steps; ++j)
-  // {
-  //   waypoint.x = start_point.x + j * step_size * x;
-  //   waypoint.y = start_point.y + j * step_size * y;
-  //   waypoint.z = start_point.z + j * step_size * z;
-  //   std::cout<<"Waypoint "<<j<<": "<<"x: "<<waypoint.x<<"y: "<<waypoint.y<<"z: "<<waypoint.z<<std::endl;
-  //   target_pose = moveAbovePose(waypoint);
-  //   waypoints.push_back(target_pose);
-    
-  // }
-
   waypoints.push_back(end_pose);
 
   moveit_msgs::RobotTrajectory trajectory;
@@ -865,6 +899,8 @@ cw3::cartesianPathPlan(geometry_msgs::Pose end_pose)
 
   crt_ee_position = end_pose.position;
 }
+
+///////////////////////////////////////////////////////////////////////////////
 
 /**
  * @brief Scans the environment by capturing point clouds from different perspectives.
@@ -982,7 +1018,7 @@ cw3::scanEnvironment() {
   return full_scene_cloud;
 }
 
-
+///////////////////////////////////////////////////////////////////////////////
 
 /**
  * @brief Performs color determination for each basket location.
@@ -1015,6 +1051,8 @@ cw3::colorDetermination(float r, float g, float b) {
     }
 
 }
+
+///////////////////////////////////////////////////////////////////////////////
 
 /**
  * @brief Publishes a marker at a specified position.
@@ -1056,6 +1094,7 @@ cw3::publishMarker(float x, float y, float z, int id) {
   marker_pub.publish(marker);
 }
 
+///////////////////////////////////////////////////////////////////////////////
 
 std::array<int64_t, 2>
 cw3::t3()
@@ -1177,7 +1216,6 @@ cw3::t3()
 
       float centroid_to_ee_distance = euclidDistance(centroid,crt_ee_position);
 
-      // applyPassthrough(cluster_cloud_ptr, cluster_cloud_ptr, "z",10,0.05);
 
       if (max_dist > 0.2)
       {
@@ -1240,7 +1278,7 @@ cw3::t3()
     float size = determineSize("nought", noughts_max_distances[closest_nought]);
     gripper_open_ = size+0.04;
     transformGraspAndPlace(noughts[closest_nought], basket_point, "nought", noughts_clouds[closest_nought], size);
-    // t1(noughts[closest_nought],basket_point,"nought");
+
   }
   else if (noughts.size() < crosses.size())
   {
@@ -1248,7 +1286,7 @@ cw3::t3()
     float size = determineSize("cross", crosses_max_distances[closest_cross]);
     gripper_open_ = size+0.04;
     transformGraspAndPlace(crosses[closest_cross], basket_point, "cross", crosses_clouds[closest_cross], size);
-    // t1(crosses[closest_nought],basket_point,"cross");
+
   } 
   else
   {
@@ -1283,6 +1321,29 @@ cw3::t3()
 
   return res;
 }
+
+///////////////////////////////////////////////////////////////////////////////
+
+/**
+ * @brief Transforms the point cloud, then performs a grasp and place operation.
+ * 
+ * This function manipulates the point cloud data to align with the object's orientation before executing a grasp and place operation.
+ * It makes a copy of the input point cloud and applies a transformation to each point. This transformation involves translating the 
+ * point cloud so that the object's position becomes the new origin, and then swapping the x and y coordinates of each point. This 
+ * operation is intended to align the point cloud with the robot's frame of reference or to correct for orientation differences 
+ * between the object and the robot's grasp mechanism. After transforming the point cloud, the function proceeds to grasp the object
+ * at its current location and place it at a specified target location, taking into account the object's shape and the size parameter 
+ * provided.
+ * 
+ * This method allows for more accurate positioning and orientation handling during the pick and place process by ensuring the 
+ * transformed point cloud is in the desired orientation relative to the robot's manipulator.
+ * 
+ * @param object The geometry_msgs::Point representing the object's starting position.
+ * @param target The geometry_msgs::Point representing the target position for placement.
+ * @param shape_type A string indicating the shape of the object ('cross' or 'nought'), which influences the grasp strategy.
+ * @param input_cloud A shared pointer to the point cloud data associated with the object.
+ * @param size A double value representing the size of the object, which affects grasp planning.
+ */
 
 void
 cw3::transformGraspAndPlace(geometry_msgs::Point object, geometry_msgs::Point target, std::string shape_type, const PointCPtr& input_cloud, double size)
@@ -1349,6 +1410,7 @@ cw3::transformGraspAndPlace(geometry_msgs::Point object, geometry_msgs::Point ta
   pick(object, target, angle_radians);
 }
 
+///////////////////////////////////////////////////////////////////////////////
 
 /**
  * @brief Adds a collision object to the MoveIt planning scene and RViz.
@@ -1395,6 +1457,24 @@ cw3::addCollision(std::string object_name, geometry_msgs::Point centre, geometry
   return;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
+/**
+ * @brief Adds a cylindrical collision object to the planning scene for the robot.
+ *
+ * This function creates and configures a cylindrical collision object based on specified parameters,
+ * then adds this object to the robot's planning scene. The function sets up the collision object with
+ * an identifier, frame of reference, and the dimensions (height and radius) of the cylinder.
+ * It defines the position of the cylinder using the provided centre coordinates. Once configured,
+ * the cylinder is added to a vector of collision objects, which is then applied to the planning scene
+ * to update the environment the robot interacts with. This helps in avoiding collisions during robot movements.
+ *
+ * @param object_name The name used to identify the collision object.
+ * @param centre The geometric centre of the cylinder, specifying its position in the space.
+ * @param height The height of the cylinder.
+ * @param radius The radius of the cylinder.
+ */
+
 void 
 cw3::addCylinderCollision(std::string object_name, geometry_msgs::Point centre, float height, float radius) {
   // Create a collision object message and a vector of these messages
@@ -1427,7 +1507,7 @@ cw3::addCylinderCollision(std::string object_name, geometry_msgs::Point centre, 
   return;
 }
 
-
+///////////////////////////////////////////////////////////////////////////////
 
 /**
  * @brief Removes a collision object from the MoveIt planning scene and RViz.
@@ -1451,6 +1531,7 @@ cw3::removeCollision(std::string object_name) {
   planning_scene_interface_.applyCollisionObjects(object_vector);
 }
 
+///////////////////////////////////////////////////////////////////////////////
 
 /**
  * @brief Removes obstacles from the MoveIt planning scene and RViz.
@@ -1468,7 +1549,7 @@ cw3::removeObstacles(int obstacle_count) {
   }
 }
 
-
+///////////////////////////////////////////////////////////////////////////////
 
 /**
  * @brief Adds a ground collision object to the MoveIt planning scene and RViz.
@@ -1502,6 +1583,23 @@ cw3::addGroundCollision(float ground_height) {
   addCollision(GROUND_COLLISION_, ground_position, ground_dimension, ground_orientation);
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
+/**
+ * @brief Adds a collision object representing an obstacle into the planning scene.
+ * 
+ * This function creates a collision object with a specified name and dimensions, positioned at a given centroid point in the
+ * environment. The collision object is used by the motion planning framework to avoid collisions during robotic arm movements.
+ * The obstacle is modeled as a box with predefined dimensions, and its orientation is set to a neutral quaternion (no rotation).
+ * This setup is commonly used to simulate obstacles in the environment that the robot must navigate around.
+ * 
+ * The dimensions and position of the obstacle can be adjusted based on the specific requirements of the environment or the task.
+ * This function abstracts the details of collision object creation, making it easier to programmatically add obstacles to the
+ * planning scene for simulation or real-world applications.
+ * 
+ * @param obstacle_centroid The geometry_msgs::Point representing the central position of the obstacle in the environment.
+ * @param obj_name A string that uniquely identifies the collision object (obstacle) being added.
+ */
 
 void
 cw3::addObstacleCollision(geometry_msgs::Point obstacle_centroid,PointCPtr &output_cloud,std::string obj_name)
@@ -1536,8 +1634,6 @@ cw3::applyBlackFilter(PointCPtr &input_cloud, PointCPtr &output_cloud) {
     color_filter.filter(*output_cloud);
 }
 
-
-
 ///////////////////////////////////////////////////////////////////////////////
 
 /**
@@ -1548,6 +1644,7 @@ cw3::applyBlackFilter(PointCPtr &input_cloud, PointCPtr &output_cloud) {
  * @param input_cloud The input point cloud to be filtered.
  * @param output_cloud The output point cloud containing the filtered points.
  */
+ 
 void 
 cw3::applyGroundFilter(PointCPtr &input_cloud, PointCPtr &output_cloud) {
     // Create a ConditionalRemoval object for filtering
@@ -1564,7 +1661,7 @@ cw3::applyGroundFilter(PointCPtr &input_cloud, PointCPtr &output_cloud) {
     color_filter.filter(*output_cloud);
 }
 
-
+///////////////////////////////////////////////////////////////////////////////
 
 /**
  * @brief Applies a pass-through filter to a point cloud along a specified axis.
@@ -1589,6 +1686,25 @@ cw3::applyPassthrough(PointCPtr &in_cloud_ptr, PointCPtr &out_cloud_ptr, std::st
   pass.filter(*out_cloud_ptr); // Execute the filtering
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
+/**
+ * @brief Applies voxel grid downsampling to reduce the density of a point cloud.
+ * 
+ * This function reduces the density of an input point cloud using a voxel grid filter, which partitions the space into a grid of voxels 
+ * and then condenses the points within each voxel into a single representative point. The size of the voxels is determined by the 
+ * `g_vg_leaf_sz` variable, which defines the length of the sides of the cubic voxel. This downsampling technique is commonly used to 
+ * decrease the number of points in a point cloud, thereby reducing computational requirements for subsequent processing steps while 
+ * preserving the overall shape and structure of the data.
+ * 
+ * The voxel grid filter is a critical pre-processing step in many point cloud processing pipelines, particularly in tasks involving 
+ * 3D reconstruction, object detection, and robotic perception, where managing the trade-off between data resolution and computational 
+ * efficiency is essential.
+ * 
+ * @param in_cloud_ptr A shared pointer to the input point cloud that will be downsampled.
+ * @param out_cloud_ptr A shared pointer to the output point cloud where the downsampled results will be stored.
+ */
+
 
 void
 cw3::applyVX (PointCPtr &in_cloud_ptr,
@@ -1602,6 +1718,22 @@ cw3::applyVX (PointCPtr &in_cloud_ptr,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * @brief Filters points in a point cloud based on their x-coordinate values.
+ * 
+ * This function selectively removes points from an input point cloud based on the x-coordinate value of each point. It uses a pass-through 
+ * filter configured to retain only the points whose x-coordinates fall within a specified range, defined by `g_pt_thrs_min` and 
+ * `g_pt_thrs_max`. Points outside this range are excluded from the output point cloud. The pass-through filter is a common technique used 
+ * to crop a point cloud to a region of interest, effectively reducing the processing load and focusing analysis on specific areas.
+ * 
+ * This filtering process is particularly useful in applications like robotic perception and environment scanning, where points outside a 
+ * certain spatial region are irrelevant to the task at hand and can be ignored to improve efficiency and focus.
+ * 
+ * @param in_cloud_ptr A shared pointer to the input point cloud to be filtered.
+ * @param out_cloud_ptr A shared pointer to the output point cloud containing only the points within the specified x-coordinate range.
+ */
+
 void
 cw3::applyPT (PointCPtr &in_cloud_ptr,
                       PointCPtr &out_cloud_ptr)
@@ -1615,6 +1747,25 @@ cw3::applyPT (PointCPtr &in_cloud_ptr,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * @brief Estimates the normal vectors for each point in a point cloud.
+ * 
+ * This function calculates the normal vectors for all points in an input point cloud. The normals are estimated using a k-nearest 
+ * neighbors approach, where the normal at each point is computed based on the orientation of its nearest neighbors. The number of 
+ * neighbors considered for each point is specified by `g_k_nn`. The normals are crucial for various 3D processing tasks, including 
+ * surface reconstruction, object segmentation, and feature extraction, as they provide information about the geometry and orientation 
+ * of surfaces within the point cloud.
+ * 
+ * The function uses a kd-tree search method for efficient nearest neighbor search, making the normal estimation process faster and 
+ * suitable for real-time applications. The estimated normals are stored in `g_cloud_normals`, making them accessible for subsequent 
+ * processing steps that rely on normal information.
+ * 
+ * Estimating normals is an essential preprocessing step in many point cloud processing pipelines, particularly those involving 
+ * the analysis of surface characteristics and geometry.
+ */
+
+
 void
 cw3::findNormals (PointCPtr &in_cloud_ptr)
 {
@@ -1628,6 +1779,25 @@ cw3::findNormals (PointCPtr &in_cloud_ptr)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * @brief Segments the largest planar component from the input point cloud.
+ * 
+ * This function performs plane segmentation on an input point cloud to identify and extract the largest planar component within it. 
+ * It uses the RANSAC algorithm alongside normal information to robustly fit a plane model to the point cloud data. Parameters such 
+ * as the distance threshold for including points in the plane, the maximum number of iterations, and the normal distance weight are 
+ * configured to optimize the segmentation process.
+ * 
+ * After identifying the plane, the function extracts both the planar inliers (points belonging to the plane) and the remaining points 
+ * (non-planar component). The extracted planar inliers are stored in a separate point cloud, which can be used for further analysis 
+ * or visualization. Simultaneously, the non-planar component is also retained for additional processing steps. This segmentation 
+ * is a crucial step in many point cloud processing pipelines, enabling tasks such as object detection on surfaces, ground removal, 
+ * and environment modeling.
+ * 
+ * Additionally, the function stores the coefficients of the plane model, which can be used to understand the orientation and position 
+ * of the plane within the 3D space.
+ */
+
 void
 cw3::segPlane (PointCPtr &in_cloud_ptr)
 {
@@ -1667,6 +1837,24 @@ cw3::segPlane (PointCPtr &in_cloud_ptr)
 }
     
 ////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * @brief Segments cylindrical components from the filtered point cloud.
+ * 
+ * This function is dedicated to identifying and extracting cylindrical components within a pre-filtered point cloud. Utilizing the 
+ * RANSAC algorithm in combination with normal information from the point cloud, it fits a cylinder model to the data. The segmentation 
+ * process involves setting specific parameters such as the normal distance weight, the maximum number of iterations for the RANSAC 
+ * algorithm, a distance threshold that points must be within to fit the model, and limits on the radius of the cylinder to be identified.
+ * 
+ * Once a cylindrical component is identified, its inliers (points that are part of the cylinder) are extracted and stored in a separate 
+ * point cloud. This allows for further analysis or visualization of the cylindrical component independently from the rest of the data. 
+ * Cylinder segmentation is a key step in processing point clouds for applications involving robotic manipulation, industrial inspection, 
+ * or environmental modeling where cylindrical objects are of interest.
+ * 
+ * The parameters used for segmentation can be fine-tuned based on the specific requirements of the application or the characteristics 
+ * of the point cloud data being processed.
+ */
+
 void
 cw3::segCylind (PointCPtr &in_cloud_ptr)
 {
@@ -1697,6 +1885,8 @@ cw3::segCylind (PointCPtr &in_cloud_ptr)
   
   return;
 }
+
+////////////////////////////////////////////////////////////////////////////////
 
 /**
  * @brief Performs DBSCAN clustering on a given point cloud.

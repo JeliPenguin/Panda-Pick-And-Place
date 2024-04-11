@@ -1,7 +1,24 @@
-/* feel free to change any part of this file, or delete this file. In general,
-you can do whatever you want with this template code, including deleting it all
-and starting from scratch. The only requirment is to make sure your entire 
-solution is contained within the cw3_team_<your_team_number> package */
+/*
+Copyright (c) [2024] [Zeyu Chen, Yuzhou Chen, Jeffrey Li]
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
 
 // include guards, prevent .h file being defined multiple times (linker error)
 #ifndef CW3_CLASS_H_
@@ -68,16 +85,19 @@ public:
 
   /* ----- class member functions ----- */
   
-  /** \brief Node handle. */
+   /** \brief Node handle. */
   ros::NodeHandle g_nh;
   
   /** \brief ROS publishers. */
   ros::Publisher g_pub_cloud;
 
+  /** \brief ROS publisher for publishing the entire scene's point cloud data. */
   ros::Publisher full_scene_pub_cloud;
 
+  /** \brief ROS publisher for publishing the OctoMap. */
   ros::Publisher octomap_publisher;
 
+  /** \brief ROS publisher for publishing visualization markers. */
   ros::Publisher marker_pub;
   
   /** \brief ROS pose publishers. */
@@ -99,92 +119,119 @@ public:
 
   /* ----- class member variables ----- */
   
+  /** \brief Gripper pose calculation. */
   geometry_msgs::Pose
   moveAbove(geometry_msgs::Point point, float angle);
   
+  /** \brief Gripper pose calculation. */
   geometry_msgs::Pose
   moveAbovePose(geometry_msgs::Point point);
   
+  /** \brief Move to the target pose. */
   bool 
   moveArm(geometry_msgs::Pose target_pose);
 
+  /** \brief Path planning. */
   bool 
   moveArmVertical(geometry_msgs::Pose target_pose, float angle_tol=0.1, float ori_weight=0.25, float radius=0.02, float pos_weight=0.25);
   
+  /** \brief Moves the gripper. */
   bool 
   moveGripper(float width);
   
+  /** \brief Computes the optimal angle. */
   float 
   computeOptimalAngle(const PointCPtr& input_cloud, double length, float radius, std::string type);
-
+  
+  /** \brief Angle between the principal axis. */
   float 
   computeOptimalAnglePCA(const PointCPtr& input_cloud);
-
+  
+  /** \brief PointCloud call back function. */
   void
   cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg);
-
+  
+  /** \brief Filtered PointCloud message. */
   void
   pubFilteredPCMsg (ros::Publisher &pc_pub,
                                PointC &pc);
-  
+                               
+  /** \brief Pick function. */
   bool
   pick(geometry_msgs::Point object, 
                   geometry_msgs::Point Goal,
                   float angle);
-
+                  
+  /** \brief Grasp and place. */
   void
   graspAndPlace(geometry_msgs::Point object, geometry_msgs::Point target, std::string shape_type, const PointCPtr& input_cloud, double size=0.04);
-
+  
+  /** \brief task 1 main function. */
   bool 
   t1(geometry_msgs::Point object, 
             geometry_msgs::Point target, 
             std::string shape_type);
 
+  /** \brief Determines the shape detected in the point cloud. */
   std::string
   determineShape();
 
+  /** \brief Determines the size in the point cloud. */ 
   float 
   determineSize(std::string type, float max_dist);
 
+  /** \brief Euclidean distance between two 3D points. */ 
   float
   euclidDistance(geometry_msgs::Point p1,geometry_msgs::Point p2);
 
+  /** \brief task 2 main function. */ 
   int64_t
   t2(std::vector<geometry_msgs::PointStamped>& ref_object_points, geometry_msgs::PointStamped mystery_object_point);
 
+  /** \brief task 3 main function. */ 
   std::array<int64_t, 2>
   t3();
   
+  /** \brief Transforms the point cloud. */ 
   void
   transformGraspAndPlace(geometry_msgs::Point object, geometry_msgs::Point target, std::string shape_type, const PointCPtr& input_cloud, double size=0.04);
 
+  /** \brief Adds a collision object. */ 
   void
   addCollision(std::string object_name,
                 geometry_msgs::Point centre, 
                 geometry_msgs::Vector3 dimensions,
                 geometry_msgs::Quaternion orientation);
 
+  /** \brief Adds a cylinder collision. */ 
   void 
   addCylinderCollision(std::string object_name, geometry_msgs::Point centre, float height, float radius);
 
+  /** \brief Remove a collision object. */ 
   void
   removeCollision(std::string object_name);
 
+  /** \brief Remove obstacles. */ 
   void
   removeObstacles(int obstacle_count);
 
+  /** \brief Adds a ground collision object. */ 
   void
   addGroundCollision(float ground_height=0.02);
 
+  /** \brief Adds Obstacle Collision. */ 
   void
   addObstacleCollision(geometry_msgs::Point obstacle_centroid,PointCPtr &output_cloud,std::string obj_name);
 
+  /** \brief Applies a ground filter. */ 
   void 
   applyGroundFilter(PointCPtr &input_cloud, PointCPtr &output_cloud);
 
+  /** \brief Filters out black. */ 
   void 
   applyBlackFilter(PointCPtr &input_cloud, PointCPtr &output_cloud);
 
+  /** \brief Applies a pass-through filter. */ 
   void
   applyPassthrough(PointCPtr &in_cloud_ptr,
                       PointCPtr &out_cloud_ptr,
