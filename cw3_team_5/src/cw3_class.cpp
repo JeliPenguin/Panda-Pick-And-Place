@@ -387,7 +387,7 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
   
   // Create offset pose for picking up the object
   geometry_msgs::Pose offset_pose = grasp_pose;
-  offset_pose.position.z += 0.125;
+  offset_pose.position.z += 0.2;
   
   // Calculate the release pose above the goal position
   geometry_msgs::Pose release_pose = moveAbovePose(Goal);
@@ -397,18 +397,18 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
   geometry_msgs::Pose approach_pose = moveAbove(object, angle);
   approach_pose.position.z = 0.5; 
 
-  addGroundCollision(0.2f); // higher ground collision requirement
-  moveArm(approach_pose);
-  removeCollision(GROUND_COLLISION_);
+  // addGroundCollision(0.2f); // higher ground collision requirement
+  // moveArm(approach_pose);
+  // removeCollision(GROUND_COLLISION_);
 
 
   // Move above the object
   addGroundCollision(0.06f);
-  // moveArm(offset_pose);
-  cartesianPathPlan(offset_pose);
+  moveArm(offset_pose);
+  // cartesianPathPlan(offset_pose);
   removeCollision(GROUND_COLLISION_);
-  addGroundCollision();
 
+  addGroundCollision();
   // Close gripper to pick up the object
   moveGripper(gripper_open_);
   // moveArmVertical(grasp_pose, 0.1f, 0.35f, 0.02f, 0.35f);
@@ -419,13 +419,14 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
   offset_pose.position.z += 0.26;
   // moveArmVertical(offset_pose, 0.15f, 0.3f, 0.03f, 0.3f);
   cartesianPathPlan(offset_pose);
+  removeCollision(GROUND_COLLISION_);
   
   // Move the arm to place the object at the goal position
   addGroundCollision(0.26f);
   moveArm(release_pose);
   removeCollision(GROUND_COLLISION_);
-  addGroundCollision();
 
+  addGroundCollision();
   release_pose.position.z -= 0.15;
   // moveArmVertical(release_pose, 0.3f, 0.3f, 0.1f, 0.3f);
   cartesianPathPlan(release_pose);
