@@ -255,68 +255,95 @@ bool cw3::moveArmVertical(geometry_msgs::Pose target_pose, float angle_tol, floa
     // Setup the target pose with orientation and position constraints
     ROS_INFO("Setting vertical pose target with orientation and position constraints");
 
-    // Define the orientation constraint to maintain the current orientation during vertical movement
-    moveit_msgs::OrientationConstraint ocm;
-    ocm.link_name = arm_group_.getEndEffectorLink();
-    ocm.header.frame_id = arm_group_.getPlanningFrame();
-    ocm.orientation = arm_group_.getCurrentPose().pose.orientation; // Use current orientation to maintain it
-    ocm.absolute_x_axis_tolerance = angle_tol;
-    ocm.absolute_y_axis_tolerance = angle_tol;
-    ocm.absolute_z_axis_tolerance = angle_tol; // Allow rotation around the Z-axis if needed
-    ocm.weight = ori_weight;
+    int total_steps = 50;
+    float step_size = 1/static_cast<float>(total_steps);
+    float x = target_pose.position.x - crt_ee_position.x;
+    float y = target_pose.position.y - crt_ee_position.y;
+    float z = target_pose.position.z - crt_ee_position.z;
 
-    // Define the position constraint using a cylinder for minimal x and y movement
-    moveit_msgs::PositionConstraint pcm;
-    pcm.link_name = arm_group_.getEndEffectorLink();
-    pcm.header.frame_id = arm_group_.getPlanningFrame();
-    shape_msgs::SolidPrimitive primitive;
-    primitive.type = shape_msgs::SolidPrimitive::CYLINDER;
-    primitive.dimensions.resize(2); // CYLINDER has 2 dimensions: height (H) and radius (R)
-    primitive.dimensions[shape_msgs::SolidPrimitive::CYLINDER_HEIGHT] = 1.0; // Large height for vertical movement
-    primitive.dimensions[shape_msgs::SolidPrimitive::CYLINDER_RADIUS] = radius; // Radius for minimal lateral movement
+    std::cout<<"Step size: "<<step_size<<std::endl;
+    std::cout<<"Vector: "<<"x: "<<x<<"y: "<<y<<"z: "<<z<<std::endl;
 
-    geometry_msgs::Pose cylinder_pose; // Position constraint centered on target_pose for x and y, allows vertical movement
-    cylinder_pose.position.x = target_pose.position.x;
-    cylinder_pose.position.y = target_pose.position.y;
-    cylinder_pose.position.z = arm_group_.getCurrentPose().pose.position.z; // Use current z position as reference
-    cylinder_pose.orientation = target_pose.orientation; // Use target orientation for alignment
 
-    pcm.constraint_region.primitives.push_back(primitive);
-    pcm.constraint_region.primitive_poses.push_back(cylinder_pose);
-    pcm.weight = pos_weight;
+    std::vector<geometry_msgs::Pose> waypoints;  
 
-    // Add both the orientation and position constraints to the move group
-    moveit_msgs::Constraints constraints;
-    constraints.orientation_constraints.push_back(ocm);
-    constraints.position_constraints.push_back(pcm);
-    arm_group_.setPathConstraints(constraints);
+    waypoints.push_back(target_pose);
 
-    // Set the target pose for vertical movement
-    arm_group_.setPoseTarget(target_pose);
+    moveit_msgs::RobotTrajectory trajectory;
+    const double jump_threshold = 6;
+    const double eef_step = 0.005;
+    double fraction = arm_group_.computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory);
 
-    // Attempt to plan and execute the path within the defined constraints
-    ROS_INFO("Attempting to plan the vertical path with combined constraints");
-    moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-    bool success = (arm_group_.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+    if (fraction > 0.9){
+      // Execute trajectory
+      moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+      my_plan.trajectory_ = trajectory;
+      arm_group_.execute(my_plan);
 
-    // Output the planning status
-    ROS_INFO("Visualising vertical plan %s", success ? "with combined constraints" : "FAILED with combined constraints");
+      crt_ee_position = target_pose.position;
 
-    // Execute the planned path if successful
-    if (success) {
-        arm_group_.move();
-        crt_ee_position = target_pose.position; // Update the current end-effector position
-        // Clear the path constraints after planning and execution   
-        arm_group_.clearPathConstraints();
+      return true;
     }
-    /*
+
     else{
-        arm_group_.clearPathConstraints();
-        moveArm(target_pose);
-    }
-    */
 
-    return success;
+      // Define the orientation constraint to maintain the current orientation during vertical movement
+      moveit_msgs::OrientationConstraint ocm;
+      ocm.link_name = arm_group_.getEndEffectorLink();
+      ocm.header.frame_id = arm_group_.getPlanningFrame();
+      ocm.orientation = arm_group_.getCurrentPose().pose.orientation; // Use current orientation to maintain it
+      ocm.absolute_x_axis_tolerance = angle_tol;
+      ocm.absolute_y_axis_tolerance = angle_tol;
+      ocm.absolute_z_axis_tolerance = angle_tol; // Allow rotation around the Z-axis if needed
+      ocm.weight = ori_weight;
+
+      // Define the position constraint using a cylinder for minimal x and y movement
+      moveit_msgs::PositionConstraint pcm;
+      pcm.link_name = arm_group_.getEndEffectorLink();
+      pcm.header.frame_id = arm_group_.getPlanningFrame();
+      shape_msgs::SolidPrimitive primitive;
+      primitive.type = shape_msgs::SolidPrimitive::CYLINDER;
+      primitive.dimensions.resize(2); // CYLINDER has 2 dimensions: height (H) and radius (R)
+      primitive.dimensions[shape_msgs::SolidPrimitive::CYLINDER_HEIGHT] = 1.0; // Large height for vertical movement
+      primitive.dimensions[shape_msgs::SolidPrimitive::CYLINDER_RADIUS] = radius; // Radius for minimal lateral movement
+
+      geometry_msgs::Pose cylinder_pose; // Position constraint centered on target_pose for x and y, allows vertical movement
+      cylinder_pose.position.x = target_pose.position.x;
+      cylinder_pose.position.y = target_pose.position.y;
+      cylinder_pose.position.z = arm_group_.getCurrentPose().pose.position.z; // Use current z position as reference
+      cylinder_pose.orientation = target_pose.orientation; // Use target orientation for alignment
+
+      pcm.constraint_region.primitives.push_back(primitive);
+      pcm.constraint_region.primitive_poses.push_back(cylinder_pose);
+      pcm.weight = pos_weight;
+
+      // Add both the orientation and position constraints to the move group
+      moveit_msgs::Constraints constraints;
+      constraints.orientation_constraints.push_back(ocm);
+      constraints.position_constraints.push_back(pcm);
+      arm_group_.setPathConstraints(constraints);
+
+      // Set the target pose for vertical movement
+      arm_group_.setPoseTarget(target_pose);
+
+      // Attempt to plan and execute the path within the defined constraints
+      ROS_INFO("Attempting to plan the vertical path with combined constraints");
+      moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+      bool success = (arm_group_.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+
+      // Output the planning status
+      ROS_INFO("Visualising vertical plan %s", success ? "with combined constraints" : "FAILED with combined constraints");
+
+      // Execute the planned path if successful
+      if (success) {
+          arm_group_.move();
+          crt_ee_position = target_pose.position; // Update the current end-effector position
+          // Clear the path constraints after planning and execution   
+          arm_group_.clearPathConstraints();
+      }
+
+      return success;
+    }
 }
 
 
@@ -434,14 +461,14 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
   addGroundCollision();
   // Close gripper to pick up the object
   moveGripper(gripper_open_);
-  // moveArmVertical(grasp_pose, 0.1f, 0.35f, 0.02f, 0.35f);
-  cartesianPathPlan(grasp_pose);
+  moveArmVertical(grasp_pose, 0.1f, 0.35f, 0.02f, 0.35f);
+  //cartesianPathPlan(grasp_pose);
   moveGripper(gripper_closed_);
 
   // Move the arm to take away the object
   offset_pose.position.z += 0.26;
-  // moveArmVertical(offset_pose, 0.15f, 0.3f, 0.03f, 0.3f);
-  cartesianPathPlan(offset_pose);
+  moveArmVertical(offset_pose, 0.15f, 0.3f, 0.03f, 0.3f);
+  // cartesianPathPlan(offset_pose);
   removeCollision(GROUND_COLLISION_);
   
   // Move the arm to place the object at the goal position
@@ -451,16 +478,15 @@ cw3::pick(geometry_msgs::Point object, geometry_msgs::Point Goal, float angle) {
 
   addGroundCollision();
   release_pose.position.z -= 0.15;
-  // moveArmVertical(release_pose, 0.3f, 0.3f, 0.1f, 0.3f);
-  cartesianPathPlan(release_pose);
+  moveArmVertical(release_pose, 0.3f, 0.3f, 0.1f, 0.3f);
+  //cartesianPathPlan(release_pose);
 
   // Open gripper to release the object
   moveGripper(80e-3);
 
   release_pose.position.z += 0.25;
-  // moveArmVertical(release_pose, 0.3f, 0.3f, 0.1f, 0.3f);
-  cartesianPathPlan(release_pose);
-
+  moveArmVertical(release_pose, 0.3f, 0.3f, 0.1f, 0.3f);
+  //cartesianPathPlan(release_pose);
   
   return true;
 }
@@ -748,26 +774,27 @@ cw3::determineShape() {
 
 float 
 cw3::determineSize(std::string type, float max_dist) {
-
+    double size;
     if (type == "cross") {
-        if (max_dist < 65e-3) {
-            return 0.02f;
-        } else if (max_dist > 97e-3) {
-            return 0.04f;
-        } else {
-            return 0.03f;
-        }
+      size = max_dist/2.5495097567963;
+
     } else {
-        if (max_dist < 96e-3) {
-            return 0.02f;
-        } else if (max_dist > 126e-3) {
-            return 0.04f;
-        } else {
-            return 0.03f;
-        }
+      size = max_dist/3.5355339059327;
+    }
+
+    std::cout << "Estimated Size: " << size << std::endl;
+    
+    // Thresholding based on the estimated size
+    if (size > 0.035f){
+      return 0.04f;
+    }
+    else if (size < 0.025f){
+      return 0.02f;
+    }
+    else{
+      return 0.03f;
     }
 }
-
 
 
 ///////////////////////////////////////////////////////////////////////////////
