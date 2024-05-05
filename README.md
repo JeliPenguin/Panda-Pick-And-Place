@@ -1,5 +1,6 @@
 # COMP0129-CW3
-Created by Yuzhou Cheng, Zeyu Chen, Jeffrey Li of team 5 as part of COMP0129 Coursework 3.
+Created by Yuzhou Cheng, Zeyu Chen, Jeffrey Li of team 5 as part of COMP0129 Coursework 3, the instructions are detailed in COMP0129-S24__CW3.pdf
+
 ## Prerequisites
 To run this task, the following environment and packages are required:
 - Ubuntu 20.04
