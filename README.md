@@ -9,7 +9,13 @@ To run this task, the following environment and packages are required:
 
  ## Usage
 
-Follow these steps to build the project and run the solution:
+ You would first need to clone ffrom the following coursework repository:
+
+ ```
+git clone https://github.com/COMP0129-UCL/comp0129_s24_labs
+```
+
+Copy and paste (or simply link the file) to the coursework repository then follow these steps to build the project and run the solution:
 
 1. **Build the project using `catkin`:**
 
