@@ -1,5 +1,5 @@
-# COMP0129-CW3
-Created by Yuzhou Cheng, Zeyu Chen, Jeffrey Li of team 5 as part of COMP0129 Coursework 3, the instructions are detailed in COMP0129-S24__CW3.pdf
+# COMP0129-CW3: Franka Emika Panda Pick And Place
+Created by Yuzhou Cheng, Zeyu Chen, Jeffrey Li of team 5 as part of COMP0129 Coursework 3, the instructions are detailed in **COMP0129-S24__CW3.pdf**
 
 ## Prerequisites
 To run this task, the following environment and packages are required:
@@ -10,7 +10,7 @@ To run this task, the following environment and packages are required:
 
  ## Usage
 
- You would first need to clone ffrom the following coursework repository:
+ You would first need to clone from the following coursework repository:
 
  ```
 git clone https://github.com/COMP0129-UCL/comp0129_s24_labs
@@ -61,7 +61,7 @@ rosservice call /task 2
 ```bash
 rosservice call /task 3
 ```
-The task will working.
+The task will be working.
 ## Description
 ### Task 1
 ![alt text](task1.png)
@@ -98,19 +98,3 @@ rosservice call /task 2
 ```bash
 rosservice call /task 3
 ```
-
-## Contribution
-### Task 1(1 hour)
-- Zeyu Chen (33%)
-- Jeffrey Li (33%)
-- Yuzhou Chen (33%)
-
-### Task 2(20 hour)
-- Zeyu Chen (33%)
-- Jeffrey Li (33%)
-- Yuzhou Chen (33%)
-
-### Task 3(30 hour)
-- Zeyu Chen (33%)
-- Jeffrey Li (33%)
-- Yuzhou Chen (33%)
